@@ -1,1 +1,130 @@
-"Hello World" 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>OneDrive Share Tree Viewer</title>
+  <style>
+    body { font-family: sans-serif; padding:1em; max-width:800px; margin:auto }
+    input, button { font-size:1rem; padding:0.3em; margin:0.2em 0 }
+    ul { list-style:none; padding-left:1em }
+    li { margin:0.2em 0; cursor:pointer }
+    li.folder::before { content:"📁 " }
+    li.file::before   { content:"📄 " }
+    li.collapsed > ul { display:none }
+    .error { color:red }
+  </style>
+  <!-- MSAL.js -->
+  <script src="https://alcdn.msauth.net/browser/2.34.0/js/msal-browser.min.js"></script>
+</head>
+<body>
+  <h1>OneDrive Share Tree Viewer</h1>
+  <p>
+    Public or Business Share URL:<br/>
+    <input id="shareUrl" size="60"
+      placeholder="https://1drv.ms/… or https://yourcompany.sharepoint.com/…"/>
+    <button id="btnGo">Load Tree</button>
+  </p>
+  <div id="tree"></div>
+
+  <script>
+  // 1) MSAL config — register an Azure AD app, add YOUR_GITHUB_PAGES_ORIGIN as a redirectUri
+  const msalConfig = {
+    auth: {
+      clientId: "YOUR_CLIENT_ID",          // ← from Azure AD app registration
+      redirectUri: window.location.origin  // must match exactly in AAD
+    }
+  };
+  const loginRequest = { scopes: ["Files.Read.All"] };
+  const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+  // 2) Turn any share link into the Graph‐style shareId
+  function makeShareId(url) {
+    return "u!" + btoa(url)
+      .replace(/=/g, "")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_");
+  }
+
+  // 3) Lightweight Graph GET with MSAL token
+  async function graphGet(path) {
+    let account = msalInstance.getAllAccounts()[0];
+    if (!account) {
+      const loginResp = await msalInstance.loginPopup(loginRequest);
+      account = loginResp.account;
+    }
+    const tokenResp = await msalInstance.acquireTokenSilent({ ...loginRequest, account });
+    const res = await fetch("https://graph.microsoft.com/v1.0" + path, {
+      headers: { Authorization: "Bearer " + tokenResp.accessToken }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    return res.json();
+  }
+
+  // 4) Fetch children of root or a folder
+  async function fetchChildren(shareId, itemId = "root") {
+    const endpoint = `/shares/${shareId}/driveItem/${itemId === "root" ? "children" : `items/${itemId}/children`}`;
+    const json = await graphGet(endpoint);
+    return json.value || [];
+  }
+
+  // 5) Build a tree node
+  function makeNode(item, shareId) {
+    const li = document.createElement("li");
+    li.textContent = item.name;
+    if (item.folder) {
+      li.classList.add("folder", "collapsed");
+      li.addEventListener("click", async e => {
+        e.stopPropagation();
+        li.classList.toggle("collapsed");
+        if (!li._loaded) {
+          li._loaded = true;
+          try {
+            const kids = await fetchChildren(shareId, item.id);
+            const ul = document.createElement("ul");
+            kids.forEach(c => ul.appendChild(makeNode(c, shareId)));
+            li.appendChild(ul);
+          } catch (err) {
+            console.error(err);
+            const errP = document.createElement("p");
+            errP.className = "error";
+            errP.textContent = err.message;
+            li.appendChild(errP);
+          }
+        }
+      });
+    } else {
+      li.classList.add("file");
+      li.addEventListener("click", () => {
+        // download endpoint
+        const url = `https://graph.microsoft.com/v1.0/shares/${shareId}/driveItem/items/${item.id}/content`;
+        // open in new tab; user will be prompted to sign in if necessary
+        window.open(url, "_blank");
+      });
+    }
+    return li;
+  }
+
+  // 6) Wire up button
+  document.getElementById("btnGo").addEventListener("click", async () => {
+    const url = document.getElementById("shareUrl").value.trim();
+    const tree = document.getElementById("tree");
+    if (!url) {
+      tree.innerHTML = '<p class="error">Please enter a valid share URL.</p>';
+      return;
+    }
+    tree.textContent = "Loading…";
+    try {
+      const shareId = makeShareId(url);
+      const root = await fetchChildren(shareId);
+      tree.innerHTML = "";
+      const ul = document.createElement("ul");
+      root.forEach(item => ul.appendChild(makeNode(item, shareId)));
+      tree.appendChild(ul);
+    } catch (err) {
+      console.error(err);
+      tree.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+    }
+  });
+  </script>
+</body>
+</html>
