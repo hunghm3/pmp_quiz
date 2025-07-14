@@ -1,130 +1,974 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <title>OneDrive Share Tree Viewer</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PMI Quiz Suite (Web)</title>
   <style>
-    body { font-family: sans-serif; padding:1em; max-width:800px; margin:auto }
-    input, button { font-size:1rem; padding:0.3em; margin:0.2em 0 }
-    ul { list-style:none; padding-left:1em }
-    li { margin:0.2em 0; cursor:pointer }
-    li.folder::before { content:"📁 " }
-    li.file::before   { content:"📄 " }
-    li.collapsed > ul { display:none }
-    .error { color:red }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    nav { display: flex; background: #333; color: #fff; }
+    nav button { flex: 1; padding: 12px; background: none; border: none; color: inherit; cursor: pointer; }
+    nav button.active { background: #555; }
+    section { display: none; padding: 20px; }
+    section.active { display: block; }
+    .status { margin: 10px 0; color: #555; }
+    .btn { padding: 8px 16px; margin: 10px 5px; }
+    #folder-browser { border: 1px solid #ccc; overflow-y: auto; height: 200px; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { margin: 4px 0; cursor: pointer; }
+    .folder { font-weight: bold; }
+    .hidden { display: none; }
+    .choice-correct { color: #007700; font-weight: bold; }
+    .choice-selected { color: #bb0000; font-weight: bold; }
+    .choice-correct.choice-selected { color: #0066aa; }
+    #token-section { margin: 16px 0; }
+    .star-btn { font-size: 1.3em; background: none; border: none; cursor: pointer; }
+    #test-status, #exam-status { min-height: 1.2em; }
+    #test-explanation, #review-explanation { background: #f1f1f1; padding: 10px; min-height: 40px; margin-top: 10px; }
+    #review-explanation strong { display: block; margin-bottom: 8px; }
+    #review-meta { margin: 8px 0; color: #333; }
+    #review-choices label, #review-choices span { padding-left: 10px; }
+    #config-cats label { display: block; margin: 3px 0; }
+    #review-category { min-width: 110px; }
+    #review-filter { min-width: 130px; }
+    #exam-nav { margin: 14px 0 10px 0; }
+    #exam-nav button { width: 32px; height: 32px; margin: 2px; font-weight: bold; border-radius: 6px; border: 1px solid #aaa; }
+    #exam-nav .answered { background: #D1FFD1; border-color: #1b7e00; }
+    #exam-nav .starred { background: #FFD580; border-color: #b97400; }
+    #exam-nav .current { border: 2px solid #1a3ea5; }
+    #exam-timer.warning { color: #b90000; font-weight: bold; }
+    #reset-section { margin: 18px 0 8px 0; }
+    #reset-section .btn { margin-left: 0; }
+    @media (max-width: 600px) {
+      #chart { width: 100% !important; height: 240px !important; }
+      #exam-nav button { width: 24px; height: 24px; font-size: 13px; }
+    }
   </style>
-  <!-- MSAL.js -->
-  <script src="https://alcdn.msauth.net/browser/2.34.0/js/msal-browser.min.js"></script>
 </head>
 <body>
-  <h1>OneDrive Share Tree Viewer</h1>
-  <p>
-    Public or Business Share URL:<br/>
-    <input id="shareUrl" size="60"
-      placeholder="https://1drv.ms/… or https://yourcompany.sharepoint.com/…"/>
-    <button id="btnGo">Load Tree</button>
-  </p>
-  <div id="tree"></div>
+  <nav>
+    <button id="tab-config" class="active">Config</button>
+    <button id="tab-test">Test</button>
+    <button id="tab-exam">Exam</button>
+    <button id="tab-review">Review</button>
+    <button id="tab-analyze">Analyze</button>
+  </nav>
 
-  <script>
-  // 1) MSAL config — register an Azure AD app, add YOUR_GITHUB_PAGES_ORIGIN as a redirectUri
-  const msalConfig = {
-    auth: {
-      clientId: "YOUR_CLIENT_ID",          // ← from Azure AD app registration
-      redirectUri: window.location.origin  // must match exactly in AAD
+  <!-- CONFIG TAB -->
+  <section id="config" class="active">
+    <h2>Configuration</h2>
+    <div id="token-section">
+      <label>GitHub Token: <input type="password" id="gh-token" placeholder="Enter your GitHub PAT" style="width:300px;"></label>
+      <button class="btn" id="save-token">Save Token</button>
+      <span id="token-status" class="status"></span>
+    </div>
+    <button class="btn" id="fetch-json">Fetch</button>
+    <span id="config-status" class="status"></span>
+    <div id="folder-browser"><ul id="folder-list"></ul></div>
+    <div id="file-section" class="hidden">
+      <h3>Categories</h3>
+      <div id="config-cats"></div>
+      <label><input type="checkbox" id="randomize" checked> Randomize</label>
+      <label><input type="checkbox" id="only-incorrect"> Incorrect only</label>
+      <label>Time per Q: <input type="number" id="qtime" min="10" max="180" step="5" value="90"> s</label>
+      <button class="btn" id="start-test">Test!</button>
+      <button class="btn" id="start-exam">Exam</button>
+    </div>
+    <div id="reset-section">
+      <button class="btn" id="reset-all">Reset All Progress</button>
+      <select id="reset-cat"></select>
+      <button class="btn" id="reset-cat-btn">Reset Category</button>
+    </div>
+  </section>
+
+  <!-- TEST TAB -->
+  <section id="test">
+    <h2>Test Mode</h2>
+    <div>
+      <span id="test-cat" style="font-weight:bold;"></span>
+      <span id="test-progress" style="margin-left:20px;"></span>
+      <span id="test-timer" style="margin-left:20px;"></span>
+    </div>
+    <hr style="margin:10px 0 16px 0;">
+    <div id="test-question" style="margin: 10px 0; font-size: 1.18em;"></div>
+    <form id="test-choices"></form>
+    <button class="star-btn" id="test-star" title="Toggle Star">☆</button>
+    <button class="btn" id="test-confirm" disabled>Confirm</button>
+    <span id="test-status"></span>
+    <div id="test-explanation"></div>
+  </section>
+
+  <!-- EXAM TAB -->
+  <section id="exam">
+    <h2>Exam Mode  <button class="btn" id="exam-submit">Submit Exam</button></h2>
+    <div>
+      <span id="exam-cat" style="font-weight:bold;"></span>
+      <span id="exam-progress" style="margin-left:20px;"></span>
+      <span id="exam-timer" style="margin-left:20px;"></span>
+      <span id="exam-status"></span>
+    </div>
+    <hr style="margin:10px 0 16px 0;">
+    <div id="exam-nav"></div>
+    <hr style="margin:10px 0 16px 0;">
+    <div id="exam-question" style="margin: 10px 0; font-size: 1.18em;"></div>
+    <form id="exam-choices"></form>
+    <button class="star-btn" id="exam-star" title="Toggle Star">☆</button>
+    <button class="btn" id="exam-next">Next</button>
+    
+  </section>
+
+  <!-- REVIEW TAB -->
+  <section id="review">
+    <h2>Review Mode</h2>
+    <div>
+      <label>Filter:
+        <select id="review-filter">
+          <option value="all">All quiz</option>
+          <option value="answered">Answered (Any)</option>
+          <option value="correct">Answered (Correct)</option>
+          <option value="incorrect">Answered (Incorrect)</option>
+          <option value="star">Star</option>
+          <option value="star_incorrect">Star (Incorrect)</option>
+        </select>
+      </label>
+      <label>Category:
+        <select id="review-category"></select>
+      </label>
+      <button class="btn" id="review-prev">Previous</button>
+      <button class="btn" id="review-next">Next</button>
+      <span id="review-prog"></span>
+    </div>
+    <div id="review-meta"></div>
+    <hr style="margin:10px 0 16px 0;">
+    <div id="review-question" style="margin: 10px 0; font-size: 1.15em;"></div>
+    <div id="review-choices"></div>
+    <button class="star-btn" id="review-star" title="Toggle Star">☆</button>
+    <div id="review-explanation"></div>
+  </section>
+
+  <!-- ANALYZE TAB -->
+  <section id="analyze">
+    <h2>Analyze Mode</h2>
+    <div id="stats"></div>
+    <canvas id="chart" width="600" height="400"></canvas>
+  </section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// ========== Utility (base64, date) ==========
+function base64encode(str) { return btoa(unescape(encodeURIComponent(str))); }
+function base64decode(str) { return decodeURIComponent(escape(atob(str))); }
+function nowIso() { return new Date().toISOString(); }
+
+// ========== Global State ==========
+const config = { token: '', owner: 'hunghm3', repo: 'pmi_quiz' };
+const api = 'https://api.github.com';
+let branch='main', path='';
+let categories={}, categoryFiles=[], quizSettings={}, userData={}, pool=[], idx=0, startTime=0, timerJob=null, dirtyPush=false;
+let examQuestions=[], examIdx=0, examAnswers={}, examMarked={}, examStartTime=0, examMaxTime=0, examCountdownInt=null, examWarned=false;
+let reviewList=[], reviewIdx=0, chartInstance=null;
+let settingTime = 0;
+
+// ========== Token Management ==========
+function setTokenFromInput() {
+  const token = document.getElementById('gh-token').value.trim();
+  if (!token) {
+    document.getElementById('token-status').textContent = "Token is empty.";
+    return;
+  }
+  config.token = token;
+  localStorage.setItem('gh_token', token);
+  document.getElementById('token-status').textContent = "Token saved!";
+}
+function loadToken() {
+  const t = localStorage.getItem('gh_token');
+  if (t) {
+    config.token = t;
+    document.getElementById('gh-token').value = t;
+    document.getElementById('token-status').textContent = "Token loaded from storage.";
+  } else {
+    document.getElementById('token-status').textContent = "Please enter your GitHub Personal Access Token.";
+  }
+}
+
+// ========== GitHub API with Conflict Handling ==========
+async function ghFetch(p){
+  if(!config.token) throw "GitHub token not set!";
+  const r=await fetch(`${api}/repos/${config.owner}/${config.repo}/contents/${p}?ref=${branch}`,{
+    headers:{Authorization:`token ${config.token}`}
+  });
+  if(!r.ok) throw'Fetch failed';
+  return r.json();
+}
+async function ghPut(p,obj){
+  if(!config.token) throw "GitHub token not set!";
+  obj.setting_time = Date.now();
+  let sha=null, remote=null, merged=false;
+  try { remote = await ghFetch(p); sha = remote.sha; } catch {}
+  if (remote && remote.content) {
+    let remoteObj = {};
+    try { remoteObj = JSON.parse(base64decode(remote.content)); } catch {}
+    if (remoteObj.setting_time && remoteObj.setting_time > obj.setting_time) {
+      obj = remoteObj;
+      merged = true;
+    }
+  }
+  const body={
+    message:`Save ${p}`,
+    content:base64encode(JSON.stringify(obj,null,2)),
+    branch,
+    ...(sha&&{sha})
+  };
+  let r=await fetch(`${api}/repos/${config.owner}/${config.repo}/contents/${p}`,{
+    method:'PUT',
+    headers:{Authorization:`token ${config.token}`},
+    body:JSON.stringify(body)
+  });
+  if(r.status===409){
+    try {
+      remote = await ghFetch(p);
+      sha = remote.sha;
+      let remoteObj = JSON.parse(base64decode(remote.content));
+      if (remoteObj.setting_time && remoteObj.setting_time > obj.setting_time) {
+        obj = remoteObj;
+        merged = true;
+      }
+      body.sha = sha;
+      body.content = base64encode(JSON.stringify(obj,null,2));
+      r=await fetch(`${api}/repos/${config.owner}/${config.repo}/contents/${p}`,{
+        method:'PUT',
+        headers:{Authorization:`token ${config.token}`},
+        body:JSON.stringify(body)
+      });
+    } catch {}
+  }
+  if (merged) alert("A newer version was found in GitHub, your local changes were not pushed.");
+}
+
+// ========== CONFIG TAB ==========
+async function loadFolders(){
+  categories = {};
+  categoryFiles = [];
+  document.getElementById('config-cats').innerHTML = '';
+  let it=await ghFetch(path||'');
+  let files=it.filter(i=>i.type==='file'&&i.name.endsWith('.json'));
+  categoryFiles = files.map(f=>f.name);
+  let catList = [];
+  for (let file of files) {
+    let d = await ghFetch(`${path}/${file.name}`);
+    let data = JSON.parse(base64decode(d.content));
+    let cat = file.name.replace(/\.json$/,"");
+    categories[cat] = Array.isArray(data) ? data : Object.values(data);
+    catList.push(cat);
+  }
+  let html = `<label><input type="checkbox" id="cat-all"> All</label>`;
+  catList.forEach(cat=>{
+    html += `<label><input type="checkbox" class="cat-cb" value="${cat}" checked> ${cat} (${categories[cat].length})</label>`;
+  });
+  document.getElementById('config-cats').innerHTML = html;
+  document.getElementById('cat-all').onchange = function(){
+    document.querySelectorAll('.cat-cb').forEach(cb=>cb.checked=this.checked);
+  };
+  document.querySelectorAll('.cat-cb').forEach(cb=>{
+    cb.onchange = function(){
+      if(!this.checked) document.getElementById('cat-all').checked = false;
+    };
+  });
+  document.getElementById('file-section').classList.remove('hidden');
+  loadReviewCategories();
+  loadResetCategories();
+}
+async function init(){
+  try {
+    document.getElementById('config-status').textContent = "Loading branch info...";
+    const r=await fetch(`${api}/repos/${config.owner}/${config.repo}`,{
+      headers:{Authorization:`token ${config.token}`}
+    });
+    branch=(await r.json()).default_branch;
+  } catch {
+    document.getElementById('config-status').textContent = "Failed to load repo info. Check your token/repo.";
+    return;
+  }
+  await loadFolders();
+  let saved = JSON.parse(localStorage.getItem('quizSettings')||'{}');
+  document.getElementById('randomize').checked = saved.randomize ?? true;
+  document.getElementById('only-incorrect').checked = saved.onlyIncorrect ?? false;
+  document.getElementById('qtime').value = saved.qtime ?? 90;
+  await syncUserDataOnLoad();
+  setTimeout(tryRestoreSession, 500);
+}
+function saveQuizSettings(){
+  quizSettings = {
+    randomize: document.getElementById('randomize').checked,
+    onlyIncorrect: document.getElementById('only-incorrect').checked,
+    qtime: Number(document.getElementById('qtime').value),
+    selectedCats: Array.from(document.querySelectorAll('.cat-cb')).filter(cb=>cb.checked).map(cb=>cb.value)
+  };
+  localStorage.setItem('quizSettings', JSON.stringify(quizSettings));
+}
+
+// ========== GITHUB SYNC & CONFLICTS ==========
+async function syncUserDataOnLoad(){
+  let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
+  let remote = null, remoteObj = {};
+  try { remote = await ghFetch(fname); } catch {}
+  if (remote && remote.content) {
+    try { remoteObj = JSON.parse(base64decode(remote.content)); } catch {}
+  }
+  let localObj = {};
+  try { localObj = JSON.parse(localStorage.getItem('userData')||'{}'); } catch {}
+  let localTime = localObj.setting_time||0, remoteTime = remoteObj.setting_time||0;
+  if (!localTime && !remoteTime) {
+    userData = {}; settingTime = Date.now();
+  } else if (localTime >= remoteTime) {
+    userData = localObj; settingTime = localTime;
+  } else {
+    userData = remoteObj; settingTime = remoteTime;
+    localStorage.setItem('userData', JSON.stringify(userData));
+  }
+}
+
+// ========== SESSION MANAGEMENT ==========
+function saveSession(mode, data) {
+  localStorage.setItem('quizSession', JSON.stringify({mode, data}));
+}
+function clearSession() {
+  localStorage.removeItem('quizSession');
+}
+function tryRestoreSession() {
+  let lastSession = null;
+  try { lastSession = JSON.parse(localStorage.getItem('quizSession') || 'null'); } catch {}
+  if (!lastSession || !lastSession.mode) return;
+  if (lastSession.mode === 'test' && lastSession.data && lastSession.data.pool && lastSession.data.pool.length) {
+    idx = lastSession.data.idx;
+    pool = lastSession.data.pool;
+    switchTab('test');
+    showTestQuestion();
+    return true;
+  }
+  if (lastSession.mode === 'exam' && lastSession.data && lastSession.data.examQuestions && lastSession.data.examQuestions.length) {
+    examIdx = lastSession.data.examIdx;
+    examQuestions = lastSession.data.examQuestions;
+    examAnswers = lastSession.data.examAnswers;
+    examMarked = lastSession.data.examMarked;
+    examStartTime = lastSession.data.examStartTime;
+    examMaxTime = lastSession.data.examMaxTime;
+    switchTab('exam');
+    startExamCountdown();
+    showExamQuestion();
+    return true;
+  }
+  if (lastSession.mode === 'review' && lastSession.data && lastSession.data.reviewList && lastSession.data.reviewList.length) {
+    reviewIdx = lastSession.data.reviewIdx;
+    reviewList = lastSession.data.reviewList;
+    switchTab('review');
+    showReviewItem();
+    return true;
+  }
+}
+
+// Save session on every step for test/exam/review
+function saveTestSession() { saveSession('test', {idx, pool}); }
+function saveExamSession() { saveSession('exam', {examIdx, examQuestions, examAnswers, examMarked, examStartTime, examMaxTime}); }
+function saveReviewSession() { saveSession('review', {reviewIdx, reviewList}); }
+
+// ========== TEST TAB ==========
+function getSelectedCats(){
+  return Array.from(document.querySelectorAll('.cat-cb')).filter(cb=>cb.checked).map(cb=>cb.value);
+}
+function saveUserData(){
+  userData.setting_time = Date.now();
+  localStorage.setItem('userData', JSON.stringify(userData));
+  dirtyPush = true;
+}
+function startTest(){
+  clearSession();
+  saveQuizSettings();
+  let sel = getSelectedCats();
+  if (!sel.length) { alert("Please select at least one category."); return; }
+  userData = JSON.parse(localStorage.getItem('userData')||'{}');
+  pool = [];
+  for (let c of sel) {
+    let recs = userData[c] || {};
+    for (let q of categories[c]) {
+      let ctx = q["question_context"];
+      if (quizSettings.onlyIncorrect) {
+        if (!(ctx in recs) || !recs[ctx]?.is_correct) {
+          q["_cat"] = c;
+          pool.push({...q});
+        }
+      } else {
+        if (ctx in recs) continue;
+        q["_cat"] = c;
+        pool.push({...q});
+      }
+    }
+  }
+  if (!pool.length) { alert("No new questions left."); return; }
+  if (quizSettings.randomize) pool.sort(()=>Math.random()-0.5);
+  idx = 0;
+  showTestQuestion();
+  switchTab('test');
+}
+function showTestQuestion(){
+  let q = pool[idx];
+  document.getElementById('test-cat').textContent = q._cat;
+  document.getElementById('test-progress').textContent = `${idx+1}/${pool.length}`;
+  document.getElementById('test-question').textContent = q.question_context;
+  let ch=document.getElementById('test-choices'); ch.innerHTML='';
+  let ans = q.question_answer;
+  let correctArr = Array.isArray(ans) ? ans.map(String) :
+    ans.correct.replace(/\band\b/gi,',').split(',').map(s=>s.trim().toLowerCase());
+  let multi = correctArr.length>1;
+  Object.entries(q.question_data).forEach(([k,t])=>{
+    let id = "test-choice-"+k;
+    let input = document.createElement('input');
+    input.type = multi ? "checkbox" : "radio";
+    input.name = "test-choice";
+    input.value = k.toLowerCase();
+    input.id = id;
+    input.onchange = ()=>document.getElementById('test-confirm').disabled = false;
+    let label = document.createElement('label');
+    label.htmlFor = id; label.appendChild(input); label.append(" "+t);
+    ch.appendChild(label);
+    ch.appendChild(document.createElement('br'));
+  });
+  document.getElementById('test-explanation').innerHTML = '';
+  document.getElementById('test-confirm').textContent = 'Confirm';
+  document.getElementById('test-confirm').disabled = true;
+  document.getElementById('test-confirm').onclick = function(){
+    confirmTestAnswer();
+  };
+  document.getElementById('test-star').textContent = isStarred(q) ? '★' : '☆';
+  document.getElementById('test-status').textContent = "";
+  startTime = performance.now();
+  if (timerJob) clearInterval(timerJob);
+  timerJob = setInterval(()=>{
+    let elapsed = Math.round((performance.now()-startTime)/1000);
+    document.getElementById('test-timer').textContent = `Time: ${formatDuration(elapsed)}`;
+  }, 500);
+  saveTestSession();
+}
+function confirmTestAnswer(){
+  let q = pool[idx];
+  let sel = Array.from(document.querySelectorAll('#test-choices input:checked')).map(i=>i.value);
+  let ans = q.question_answer;
+  let correctArr = Array.isArray(ans) ? ans.map(String) :
+    ans.correct.replace(/\band\b/gi,',').split(',').map(s=>s.trim().toLowerCase());
+  let ok = sel.sort().join(',') === correctArr.sort().join(',');
+  let ex = ans.explanation||'';
+  let elapsed = Math.round((performance.now()-startTime)/1000);
+  let cat = q._cat, ctx = q.question_context;
+  userData[cat] = userData[cat]||{};
+  userData[cat][ctx] = {
+    is_correct: ok,
+    answer_option: sel,
+    answer_time: elapsed,
+    answer_date: nowIso(),
+    is_confidence: isStarred(q)
+  };
+  saveUserData();
+  document.getElementById('test-status').textContent = ok ? 'Correct' : 'Wrong';
+  document.getElementById('test-status').style.color = ok ? 'green' : 'red';
+  document.getElementById('test-explanation').innerHTML =
+    `<strong>Answer: ${correctArr.join(', ')}</strong><br>${ex}`;
+  document.getElementById('test-confirm').textContent = 'Next';
+  document.getElementById('test-confirm').disabled = false;
+  document.getElementById('test-confirm').onclick = function(){
+    if(idx<pool.length-1){
+        idx++;
+        showTestQuestion();
+    } else {
+        alert('Done');
     }
   };
-  const loginRequest = { scopes: ["Files.Read.All"] };
-  const msalInstance = new msal.PublicClientApplication(msalConfig);
-
-  // 2) Turn any share link into the Graph‐style shareId
-  function makeShareId(url) {
-    return "u!" + btoa(url)
-      .replace(/=/g, "")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_");
-  }
-
-  // 3) Lightweight Graph GET with MSAL token
-  async function graphGet(path) {
-    let account = msalInstance.getAllAccounts()[0];
-    if (!account) {
-      const loginResp = await msalInstance.loginPopup(loginRequest);
-      account = loginResp.account;
-    }
-    const tokenResp = await msalInstance.acquireTokenSilent({ ...loginRequest, account });
-    const res = await fetch("https://graph.microsoft.com/v1.0" + path, {
-      headers: { Authorization: "Bearer " + tokenResp.accessToken }
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-    return res.json();
-  }
-
-  // 4) Fetch children of root or a folder
-  async function fetchChildren(shareId, itemId = "root") {
-    const endpoint = `/shares/${shareId}/driveItem/${itemId === "root" ? "children" : `items/${itemId}/children`}`;
-    const json = await graphGet(endpoint);
-    return json.value || [];
-  }
-
-  // 5) Build a tree node
-  function makeNode(item, shareId) {
-    const li = document.createElement("li");
-    li.textContent = item.name;
-    if (item.folder) {
-      li.classList.add("folder", "collapsed");
-      li.addEventListener("click", async e => {
-        e.stopPropagation();
-        li.classList.toggle("collapsed");
-        if (!li._loaded) {
-          li._loaded = true;
-          try {
-            const kids = await fetchChildren(shareId, item.id);
-            const ul = document.createElement("ul");
-            kids.forEach(c => ul.appendChild(makeNode(c, shareId)));
-            li.appendChild(ul);
-          } catch (err) {
-            console.error(err);
-            const errP = document.createElement("p");
-            errP.className = "error";
-            errP.textContent = err.message;
-            li.appendChild(errP);
-          }
-        }
-      });
+  dirtyPush = true;
+  if (timerJob) clearInterval(timerJob);
+}
+function isStarred(q){
+  let cat = q._cat, ctx = q.question_context;
+  let d = userData[cat]?.[ctx];
+  return d && d.is_confidence;
+}
+document.getElementById('test-star').onclick = function(){
+  let q = pool[idx];
+  let cat = q._cat, ctx = q.question_context;
+  userData[cat] = userData[cat]||{};
+  userData[cat][ctx] = userData[cat][ctx]||{};
+  userData[cat][ctx].is_confidence = !isStarred(q);
+  document.getElementById('test-star').textContent = isStarred(q) ? '★' : '☆';
+  saveUserData();
+};
+document.getElementById('test-confirm').onclick = function(){
+  let q = pool[idx];
+  let sel = Array.from(document.querySelectorAll('#test-choices input:checked')).map(i=>i.value);
+  let ans = q.question_answer;
+  let correctArr = Array.isArray(ans) ? ans.map(String) :
+    ans.correct.replace(/\band\b/gi,',').split(',').map(s=>s.trim().toLowerCase());
+  let ok = sel.sort().join(',') === correctArr.sort().join(',');
+  let ex = ans.explanation||'';
+  let elapsed = Math.round((performance.now()-startTime)/1000);
+  let cat = q._cat, ctx = q.question_context;
+  userData[cat] = userData[cat]||{};
+  userData[cat][ctx] = {
+    is_correct: ok,
+    answer_option: sel,
+    answer_time: elapsed,
+    answer_date: nowIso(),
+    is_confidence: isStarred(q)
+  };
+  saveUserData();
+  document.getElementById('test-status').textContent = ok ? 'Correct' : 'Wrong';
+  document.getElementById('test-status').style.color = ok ? 'green' : 'red';
+  document.getElementById('test-explanation').innerHTML =
+    `<strong>Answer: ${correctArr.join(', ')}</strong><br>${ex}`;
+  document.getElementById('test-confirm').textContent = 'Next';
+  document.getElementById('test-confirm').disabled = false;
+  document.getElementById('test-confirm').onclick = function(){
+    if(idx<pool.length-1){
+        idx++;
+        showTestQuestion();
     } else {
-      li.classList.add("file");
-      li.addEventListener("click", () => {
-        // download endpoint
-        const url = `https://graph.microsoft.com/v1.0/shares/${shareId}/driveItem/items/${item.id}/content`;
-        // open in new tab; user will be prompted to sign in if necessary
-        window.open(url, "_blank");
-      });
+        alert('Done');
     }
-    return li;
-  }
+};
+  dirtyPush = true;
+  if (timerJob) clearInterval(timerJob);
+};
 
-  // 6) Wire up button
-  document.getElementById("btnGo").addEventListener("click", async () => {
-    const url = document.getElementById("shareUrl").value.trim();
-    const tree = document.getElementById("tree");
-    if (!url) {
-      tree.innerHTML = '<p class="error">Please enter a valid share URL.</p>';
-      return;
+// ========== EXAM TAB ==========
+function startExam(){
+  clearSession();
+  saveQuizSettings();
+  let sel = getSelectedCats();
+  if (!sel.length) { alert("Please select at least one category."); return; }
+  userData = JSON.parse(localStorage.getItem('userData')||'{}');
+  examQuestions = [];
+  for (let c of sel) {
+    for (let q of categories[c]) {
+      q["_cat"] = c;
+      examQuestions.push({...q});
     }
-    tree.textContent = "Loading…";
-    try {
-      const shareId = makeShareId(url);
-      const root = await fetchChildren(shareId);
-      tree.innerHTML = "";
-      const ul = document.createElement("ul");
-      root.forEach(item => ul.appendChild(makeNode(item, shareId)));
-      tree.appendChild(ul);
-    } catch (err) {
-      console.error(err);
-      tree.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+  }
+  if (quizSettings.randomize) examQuestions.sort(()=>Math.random()-0.5);
+  examIdx = 0; examAnswers = {}; examMarked = {}; examWarned = false;
+  examMaxTime = Number(document.getElementById('qtime').value) * examQuestions.length;
+  examStartTime = performance.now();
+  startExamCountdown();
+  showExamQuestion();
+  switchTab('exam');
+}
+function showExamQuestion(){
+  let q = examQuestions[examIdx];
+  document.getElementById('exam-cat').textContent = q._cat;
+  document.getElementById('exam-progress').textContent = `${examIdx+1}/${examQuestions.length}`;
+  document.getElementById('exam-question').textContent = q.question_context;
+  let ch=document.getElementById('exam-choices'); ch.innerHTML='';
+  let ans = q.question_answer;
+  let correctArr = Array.isArray(ans) ? ans.map(String) :
+    ans.correct.replace(/\band\b/gi,',').split(',').map(s=>s.trim().toLowerCase());
+  let multi = correctArr.length > 1;
+  Object.entries(q.question_data).forEach(([k,t])=>{
+    let id = "exam-choice-"+k;
+    let input = document.createElement('input');
+    input.type = multi ? "checkbox" : "radio";
+    input.name = "exam-choice";
+    input.value = k.toLowerCase();
+    input.id = id;
+    input.checked = Array.isArray(examAnswers[q.question_context]) ?
+      examAnswers[q.question_context].includes(k.toLowerCase()) :
+      examAnswers[q.question_context] === k.toLowerCase();
+    let label = document.createElement('label');
+    label.htmlFor = id; label.appendChild(input); label.append(" "+t);
+    ch.appendChild(label);
+    ch.appendChild(document.createElement('br'));
+  });
+  document.getElementById('exam-star').textContent = examMarked[q.question_context] ? '★' : '☆';
+  document.getElementById('exam-status').textContent = "";
+  buildExamNav();
+  saveExamSession();
+}
+function buildExamNav(){
+  let nav = document.getElementById('exam-nav'); nav.innerHTML = "";
+  for (let i = 0; i < examQuestions.length; i++) {
+    let q = examQuestions[i];
+    let btn = document.createElement('button');
+    btn.textContent = (i+1);
+    btn.onclick = ()=>{ examIdx = i; showExamQuestion(); };
+    let ctx = q.question_context;
+    if (i === examIdx) btn.classList.add('current');
+    if (examMarked[ctx]) btn.classList.add('starred');
+    if (examAnswers[ctx] && (Array.isArray(examAnswers[ctx]) ? examAnswers[ctx].length : examAnswers[ctx])) btn.classList.add('answered');
+    nav.appendChild(btn);
+  }
+}
+document.getElementById('exam-star').onclick = function(){
+  let q = examQuestions[examIdx];
+  examMarked[q.question_context] = !examMarked[q.question_context];
+  document.getElementById('exam-star').textContent = examMarked[q.question_context] ? '★' : '☆';
+  buildExamNav();
+  saveExamSession();
+};
+document.getElementById('exam-next').onclick = function(){
+  let q = examQuestions[examIdx];
+  let ans = q.question_answer;
+  let correctArr = Array.isArray(ans) ? ans.map(String) :
+    ans.correct.replace(/\band\b/gi,',').split(',').map(s=>s.trim().toLowerCase());
+  let multi = correctArr.length > 1;
+  let sel = Array.from(document.querySelectorAll('#exam-choices input:checked')).map(i=>i.value);
+  if (!sel.length) {
+    examAnswers[q.question_context] = multi ? [] : '';
+  } else {
+    examAnswers[q.question_context] = multi ? sel : sel[0];
+  }
+  examMarked[q.question_context] = examMarked[q.question_context]||false;
+  examIdx = (examIdx+1)%examQuestions.length;
+  showExamQuestion();
+};
+document.getElementById('exam-submit').onclick = submitExam;
+function submitExam(){
+  for (let q of examQuestions) {
+    let ctx = q.question_context;
+    let ans = q.question_answer;
+    let correctArr = Array.isArray(ans) ? ans.map(String) :
+      ans.correct.replace(/\band\b/gi,',').split(',').map(s=>s.trim().toLowerCase());
+    let chosen = examAnswers[ctx];
+    let is_correct = (Array.isArray(chosen) && Array.isArray(correctArr)) ?
+      (chosen.sort().join(',') === correctArr.sort().join(',')) :
+      (chosen === correctArr[0]);
+    let elapsed = Math.round((performance.now()-examStartTime)/1000);
+    let cat = q._cat;
+    userData[cat] = userData[cat]||{};
+    userData[cat][ctx] = {
+      is_correct: is_correct,
+      answer_option: chosen,
+      answer_time: elapsed,
+      answer_date: nowIso(),
+      is_confidence: examMarked[ctx]||false
+    };
+  }
+  saveUserData();
+  let correct = 0;
+  for (let q of examQuestions) {
+    let ctx = q.question_context;
+    let ans = q.question_answer;
+    let correctArr = Array.isArray(ans) ? ans.map(String) :
+      ans.correct.replace(/\band\b/gi,',').split(',').map(s=>s.trim().toLowerCase());
+    let chosen = examAnswers[ctx];
+    let is_correct = (Array.isArray(chosen) && Array.isArray(correctArr)) ?
+      (chosen.sort().join(',') === correctArr.sort().join(',')) :
+      (chosen === correctArr[0]);
+    if(is_correct) correct++;
+  }
+  let pct = Math.round(correct/examQuestions.length*100);
+  alert(`You answered ${correct}/${examQuestions.length} correctly (${pct}%).`);
+  dirtyPush = true;
+  switchTab('analyze');
+}
+function startExamCountdown(){
+  clearInterval(examCountdownInt);
+  examWarned = false;
+  function update(){
+    let elapsed = Math.round((performance.now()-examStartTime)/1000);
+    let remaining = examMaxTime - elapsed;
+    let el = document.getElementById('exam-timer');
+    if (remaining <= 0) {
+      el.textContent = "Time is up!";
+      el.classList.add('warning');
+      if (!examWarned) {
+        document.getElementById('exam-status').textContent = "Exam time is up! Please submit your answers.";
+        document.getElementById('exam-status').style.color = "#b90000";
+        examWarned = true;
+      }
+    } else {
+      el.textContent = `Time remaining: ${formatDuration(remaining)}`;
+      el.classList.remove('warning');
+      document.getElementById('exam-status').textContent = "";
+    }
+  }
+  update();
+  examCountdownInt = setInterval(update, 1000);
+  saveExamSession();
+}
+
+// ========== REVIEW TAB ==========
+function loadReviewCategories(){
+  let cats = Object.keys(categories);
+  let sel = document.getElementById('review-category');
+  sel.innerHTML = "";
+  cats.forEach(cat=>{
+    let opt = document.createElement('option');
+    opt.value = cat; opt.textContent = cat;
+    sel.appendChild(opt);
+  });
+}
+document.getElementById('review-filter').onchange = buildReview;
+document.getElementById('review-category').onchange = buildReview;
+function buildReview(){
+  let filter = document.getElementById('review-filter').value;
+  let cat = document.getElementById('review-category').value;
+  userData = JSON.parse(localStorage.getItem('userData')||'{}');
+  let list = [];
+  if(!cat) { reviewList=[]; reviewIdx=0; showReviewItem(); return; }
+  let qlist = categories[cat]||[];
+  if(filter==='all'){
+    list = qlist.map(q=>({ctx:q.question_context,rec:userData[cat]?.[q.question_context]||{}}));
+  }else{
+    let entries = Object.entries(userData[cat]||{}).filter(([ctx,rec])=>ctx!=='total_time');
+    function keep([ctx,rec]){
+      let ok=rec.is_correct, star=rec.is_confidence;
+      if(filter==='answered') return true;
+      if(filter==='correct') return ok;
+      if(filter==='incorrect') return ok===false;
+      if(filter==='star') return star;
+      if(filter==='star_incorrect') return star && ok===false;
+      return false;
+    }
+    list = entries.filter(keep).map(([ctx,rec])=>({ctx,rec}));
+  }
+  reviewList = list;
+  reviewIdx = 0;
+  showReviewItem();
+}
+function showReviewItem(){
+  if(!reviewList.length){
+    document.getElementById('review-meta').textContent = 'No questions to review.';
+    document.getElementById('review-question').textContent = '';
+    document.getElementById('review-choices').innerHTML = '';
+    document.getElementById('review-explanation').innerHTML = '';
+    document.getElementById('review-star').textContent = '☆';
+    document.getElementById('review-prog').textContent = '';
+    return;
+  }
+  let {ctx,rec} = reviewList[reviewIdx];
+  let cat = document.getElementById('review-category').value;
+  let qdict = (categories[cat]||[]).find(q=>q.question_context===ctx);
+  document.getElementById('review-prog').textContent = `${reviewIdx+1}/${reviewList.length}`;
+  let tm = rec.answer_time||0, dt = rec.answer_date||"", ok = rec.is_correct;
+  let tstr = tm>=60 ? `${Math.floor(tm/60)}m ${tm%60}s` : `${tm}s`;
+  document.getElementById('review-meta').textContent = `Answered: ${dt}   Time: ${tstr}   ${ok===true?'Correct':ok===false?'Incorrect':''}`;
+  document.getElementById('review-star').textContent = rec.is_confidence ? '★':'☆';
+  document.getElementById('review-question').textContent = ctx;
+  let ch = document.getElementById('review-choices'); ch.innerHTML='';
+  let ans = qdict.question_answer;
+  let correctArr = Array.isArray(ans) ? ans.map(String) :
+    ans.correct.replace(/\band\b/gi,',').split(',').map(s=>s.trim().toLowerCase());
+  let answerOpt = rec.answer_option;
+  let answerArr = Array.isArray(answerOpt) ? answerOpt : (typeof answerOpt==='string' ? [answerOpt] : []);
+  Object.entries(qdict.question_data).forEach(([k,t])=>{
+    let label = document.createElement('label');
+    let classes = [];
+    if(answerArr.includes(k.toLowerCase())) classes.push('choice-selected');
+    if(correctArr.includes(k.toLowerCase())) classes.push('choice-correct');
+    label.className = classes.join(' ');
+    label.textContent = `[${k}] ${t}`;
+    ch.appendChild(label);
+    ch.appendChild(document.createElement('br'));
+  });
+  let ex = ans.explanation||'';
+  document.getElementById('review-explanation').innerHTML =
+    `<strong>Answer: ${correctArr.join(', ')}</strong><br><span style="font-weight:bold;color:#1a3ea5;">Solution:</span><br>${ex}`;
+  saveReviewSession();
+}
+document.getElementById('review-prev').onclick = function(){
+  if(reviewList.length) { reviewIdx=(reviewIdx-1+reviewList.length)%reviewList.length; showReviewItem(); }
+};
+document.getElementById('review-next').onclick = function(){
+  if(reviewList.length) { reviewIdx=(reviewIdx+1)%reviewList.length; showReviewItem(); }
+};
+document.getElementById('review-star').onclick = function(){
+  if(!reviewList.length) return;
+  let {ctx,rec} = reviewList[reviewIdx];
+  let cat = document.getElementById('review-category').value;
+  rec.is_confidence = !rec.is_confidence;
+  document.getElementById('review-star').textContent = rec.is_confidence?'★':'☆';
+  userData[cat] = userData[cat]||{};
+  userData[cat][ctx] = rec;
+  saveUserData();
+  dirtyPush = true;
+  saveReviewSession();
+};
+
+// ========== ANALYZE TAB ==========
+function analyze(){
+  userData = JSON.parse(localStorage.getItem('userData')||'{}');
+  let s = {}, total_q = 0, total_a = 0, total_c = 0, total_time = 0, total_star = 0;
+  Object.keys(categories).forEach(cat=>{
+    s[cat] = {t:0, a:0, c:0, time:0, star:0};
+    for(let q of categories[cat]){
+      let ctx = q.question_context;
+      let d = userData[cat]?.[ctx];
+      s[cat].t++;
+      total_q++;
+      if(d){
+        s[cat].a++;
+        total_a++;
+        if(d.is_correct) { s[cat].c++; total_c++; }
+        if(d.is_confidence) { s[cat].star++; total_star++; }
+        s[cat].time += d.answer_time||0;
+        total_time += d.answer_time||0;
+      }
     }
   });
-  </script>
+  let sd = document.getElementById('stats'); sd.innerHTML = '';
+  sd.innerHTML += `<div><strong>Total questions:</strong> ${total_q}</div>`;
+  sd.innerHTML += `<div><strong>Attempted:</strong> ${total_a}</div>`;
+  sd.innerHTML += `<div><strong>Correct:</strong> ${total_c}</div>`;
+  sd.innerHTML += `<div><strong>Incorrect:</strong> ${total_a-total_c}</div>`;
+  sd.innerHTML += `<div><strong>Starred:</strong> ${total_star}</div>`;
+  sd.innerHTML += `<div><strong>Unanswered:</strong> ${total_q-total_a}</div>`;
+  sd.innerHTML += `<div><strong>Avg time per question:</strong> ${total_a ? (total_time/total_a).toFixed(1)+'s' : '-'}</div>`;
+  Object.keys(s).forEach(cat=>{
+    let d = s[cat];
+    sd.innerHTML += `<div><u>${cat}</u>: attempted ${d.a}/${d.t}, correct ${d.c}, starred ${d.star}, avg time ${d.a ? (d.time/d.a).toFixed(1)+'s' : '-'}</div>`;
+  });
+  let l=Object.keys(s),v=l.map(k=>Math.round(100*s[k].c/s[k].t));
+  if(chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(document.getElementById('chart').getContext('2d'),{
+    type:'bar',
+    data:{labels:l,datasets:[{label:'Accuracy %',data:v}]}
+  });
+}
+
+// ========== RESET PROGRESS ==========
+function loadResetCategories(){
+  let cats = Object.keys(categories);
+  let sel = document.getElementById('reset-cat');
+  sel.innerHTML = "";
+  cats.forEach(cat=>{
+    let opt = document.createElement('option');
+    opt.value = cat; opt.textContent = cat;
+    sel.appendChild(opt);
+  });
+}
+document.getElementById('reset-all').onclick = function(){
+  if(confirm("Are you sure you want to reset ALL progress?")){
+    userData = {}; saveUserData();
+    alert("Progress reset.");
+  }
+};
+document.getElementById('reset-cat-btn').onclick = function(){
+  let cat = document.getElementById('reset-cat').value;
+  if(cat && confirm(`Reset progress for category "${cat}"?`)){
+    if(userData[cat]) delete userData[cat];
+    saveUserData();
+    alert("Category progress reset.");
+  }
+};
+
+// ========== Tabs ==========
+function switchTab(i){
+  ['config','test','exam','review','analyze'].forEach(t=>
+    document.getElementById(t).classList.toggle('active',t===i)
+  );
+  document.querySelectorAll('nav button').forEach(b=>
+    b.classList.toggle('active',b.id===`tab-${i}`)
+  );
+  if(i!=='test'&&i!=='exam'&&dirtyPush){
+    let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
+    ghPut(fname, userData);
+    dirtyPush=false;
+  }
+  if(i==='analyze') analyze();
+}
+document.getElementById('tab-config').onclick=()=>switchTab('config');
+document.getElementById('tab-test').onclick=()=>switchTab('test');
+document.getElementById('tab-exam').onclick=()=>switchTab('exam');
+document.getElementById('tab-review').onclick=()=>{buildReview();switchTab('review');};
+document.getElementById('tab-analyze').onclick=()=>switchTab('analyze');
+
+// ========== Folders/List ==========
+async function loadRootFolders(){
+  path = '';
+  let it=await ghFetch('');
+  renderList('folder-list',it.filter(i=>i.type==='dir'),n=>{
+    path=n;
+    loadFolders();
+  });
+}
+function renderList(id,items,fn){
+  const ul=document.getElementById(id);ul.innerHTML='';
+  items.forEach(i=>{
+    const li=document.createElement('li');
+    li.textContent=i.name;
+    if(i.type==='dir')li.classList.add('folder');
+    li.onclick=()=>fn(i.name);
+    ul.appendChild(li);
+  });
+}
+
+// ========== Keyboard Shortcuts ==========
+document.body.addEventListener('keydown',function(event){
+  let key = event.key.toUpperCase();
+  if(document.getElementById('test').classList.contains('active')){
+    let q = pool[idx];
+    if(!q) return;
+    let opts = Object.keys(q.question_data).map(k=>k.toUpperCase());
+    if(opts.includes(key)){
+      let el = document.getElementById('test-choice-'+key.toLowerCase());
+      if(el){
+        el.checked = !el.checked;
+        document.getElementById('test-confirm').disabled = false;
+      }
+    }
+    if(event.key === "Enter" || event.key === " "){
+      document.getElementById('test-confirm').click();
+    }
+  }
+  if(document.getElementById('exam').classList.contains('active')){
+    let q = examQuestions[examIdx];
+    if(!q) return;
+    let opts = Object.keys(q.question_data).map(k=>k.toUpperCase());
+    if(opts.includes(key)){
+      let el = document.getElementById('exam-choice-'+key.toLowerCase());
+      if(el){
+        el.checked = !el.checked;
+      }
+    }
+    if(event.key === "Enter" || event.key === " "){
+      document.getElementById('exam-next').click();
+    }
+  }
+  if(document.getElementById('review').classList.contains('active')){
+    if(event.key === "ArrowRight") document.getElementById('review-next').click();
+    if(event.key === "ArrowLeft") document.getElementById('review-prev').click();
+    if(event.key === " " || event.key === "Enter") document.getElementById('review-next').click();
+  }
+});
+
+// ========== Utility ==========
+function formatDuration(seconds){
+  seconds = Math.floor(seconds);
+  let hrs = Math.floor(seconds/3600);
+  let mins = Math.floor((seconds%3600)/60);
+  let secs = seconds%60;
+  let out = [];
+  if(hrs) out.push(`${hrs}h`);
+  if(mins||hrs) out.push(`${mins}m`);
+  out.push(`${secs}s`);
+  return out.join(' ');
+}
+
+// ========== Startup ==========
+window.onload = function() {
+  loadToken();
+  document.getElementById('save-token').onclick = function() {
+    setTokenFromInput();
+    init();
+  };
+  document.getElementById('fetch-json').onclick = function(){
+    init();
+  };
+  document.getElementById('start-test').onclick = startTest;
+  document.getElementById('start-exam').onclick = startExam;
+  loadRootFolders();
+  window.addEventListener('beforeunload', function() {
+    if(dirtyPush) {
+      let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
+      ghPut(fname, userData);
+    }
+  });
+};
+</script>
 </body>
 </html>
