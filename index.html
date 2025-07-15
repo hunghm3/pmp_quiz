@@ -11,11 +11,11 @@
     nav button.active { background: #555; }
     /* section { display: none; padding: 20px; } */
   /* less top/bottom padding, same left/right */
-  section { display: none; padding: 10px 20px; }
+  section { display: none; padding: 5px 20px 0px 20px; }
   /* remove extra space above the H2 and tighten below */
   section > h2 {
     margin-top: 0;
-    margin-bottom: 0.5em;
+    margin-bottom: 0;
   }
 
     section.active { display: block; }
@@ -71,6 +71,10 @@
 #review-next {
   scroll-margin-top: 110px;
 }
+
+.folder.selected {
+  background: #e0e0e0;
+}
    
 
   </style>
@@ -98,6 +102,10 @@
     <button class="btn" id="fetch-json">Fetch</button>
     <span id="config-status" class="status"></span>
     <div id="folder-browser"><ul id="folder-list"></ul></div>
+
+    <br>
+    <button class="btn" id="sync-categories">Sync Categories</button>
+    <br>
     <div id="file-section" class="hidden">
       <h3>Categories</h3>
       <div id="config-cats"></div>
@@ -130,7 +138,7 @@
       <span id="test-progress" style="margin-left:20px;"></span>
       <span id="test-timer" style="margin-left:20px;"></span>
     </div>
-    <hr style="margin:10px 0 16px 0;">
+    <hr style="margin:5px 0 5px 0;">
     <div id="test-question" style="margin: 10px 0; font-size: 1.18em;"></div>
     <form id="test-choices"></form>
     
@@ -175,6 +183,7 @@
           <option value="star_incorrect">Star (Incorrect)</option>
         </select>
       </label>
+      <br>
       <label>Category:
         <select id="review-category"></select>
       </label>
@@ -283,7 +292,13 @@ async function ghFetch(p){
   const r=await fetch(`${api}/repos/${config.owner}/${config.repo}/contents/${p}?ref=${branch}`,{
     headers:{Authorization:`token ${config.token}`}
   });
-  if(!r.ok) throw'Fetch failed';
+
+  if(r.status === 404) {
+    document.getElementById('config-status').textContent =
+      `Failed to load from git`;
+     return null;
+  }
+  if(!r.ok) throw 'Fetch failed with status ' + r.status;
 
   const json = await r.json();
   // 2) store in cache
@@ -309,11 +324,49 @@ async function ghPut(p,obj){
     branch,
     ...(sha&&{sha})
   };
-  let r=await fetch(`${api}/repos/${config.owner}/${config.repo}/contents/${p}`,{
-    method:'PUT',
-    headers:{Authorization:`token ${config.token}`},
-    body:JSON.stringify(body)
-  });
+
+  try{
+    let r=await fetch(`${api}/repos/${config.owner}/${config.repo}/contents/${p}`,{
+      method:'PUT',
+      headers:{Authorization:`token ${config.token}`},
+      body:JSON.stringify(body)
+    });
+  }catch {
+    if(r.status === 409)
+      {
+        // --- HARD RESET LOGIC ---
+          //alert("Conflict detected. Trying hard reset...");
+          try {
+            // 1. Clear local cache/data
+            localStorage.removeItem('userData');
+            userData = {};
+
+            // 2. Pull latest from GitHub
+            let remoteLatest = await ghFetch(p);
+            if (remoteLatest && remoteLatest.content) {
+              try {
+                userData = JSON.parse(base64decode(remoteLatest.content));
+                localStorage.setItem('userData', JSON.stringify(userData));
+              } catch (e) {
+                //alert("Failed to parse latest data from GitHub. Please reload the page.");
+                return;
+              }
+            } else {
+              // File does not exist remotely. Start fresh.
+              userData = {};
+              localStorage.setItem('userData', '{}');
+            }
+          }catch (e) {
+          //alert("Hard reset failed: " + e.message);
+          return;
+        }
+        
+      }
+  }
+
+  
+
+      /*
   if(r.status===409){
     try {
       remote = await ghFetch(p);
@@ -330,8 +383,12 @@ async function ghPut(p,obj){
         headers:{Authorization:`token ${config.token}`},
         body:JSON.stringify(body)
       });
+
+      
+
     } catch {}
-  }
+     
+  } */
   if (merged) alert("A newer version was found in GitHub, your local changes were not pushed.");
 }
 
@@ -377,16 +434,26 @@ function renderConfigCategories() {
 
 // ========== CONFIG TAB ==========
 async function loadFolders(){
+  
+  document.getElementById('config-status').textContent =
+      `Loading folders from Git`;
   categories = {};
   categoryFiles = [];
   document.getElementById('config-cats').innerHTML = '';
   let it=await ghFetch(path||'');
+  if (!it) {
+  // Handle missing folder/file gracefully
+  document.getElementById('config-status').textContent =
+      `Failed to load data, skip.`;
+  return;
+}
   let files=it.filter(i=>i.type==='file'&&i.name.endsWith('.json'));
   categoryFiles = files.map(f=>f.name);
   localStorage.setItem('lastFolderFiles', JSON.stringify(categoryFiles));
   let catList = [];
   for (let file of files) {
     let d = await ghFetch(`${path}/${file.name}`);
+    if (!d) continue; // If file missing, skip
     let data = JSON.parse(base64decode(d.content));
     let cat = file.name.replace(/\.json$/,"");
     categories[cat] = Array.isArray(data) ? data : Object.values(data);
@@ -424,10 +491,15 @@ async function loadFolders(){
   //loadReviewCategories();
   //loadResetCategories();
   // delegate rendering + handlers
+  document.getElementById('config-status').textContent =
+      `Rendering categories.`;
   renderConfigCategories();
 
    // Save to cache after fetching all categories
   saveCategoriesCache(categories);
+
+  document.getElementById('config-status').textContent =
+      `Loaded Folders.`;
 }
 async function init(){
   // 1) if we've already stored a default_branch, just use it
@@ -446,7 +518,7 @@ async function init(){
       // store it for next time
       localStorage.setItem('default_branch', branch);
 
-      document.getElementById('config-status').textContent = "Ready — browse folders below.";
+      //document.getElementById('config-status').textContent = "Ready — browse folders below.";
     } catch {
       document.getElementById('config-status').textContent = "Failed to load repo info. Check your token/repo.";
       return;
@@ -502,10 +574,18 @@ qtimeSlider.oninput = () => {
 
 // ========== GITHUB SYNC & CONFLICTS ==========
 async function syncUserDataOnLoad(){
+  // Check if categories are loaded and not empty
+  if (!categories || Object.keys(categories).length === 0) {
+    // No categories, do NOT fetch user.json
+    userData = {}; // Optionally reset userData
+    return;
+  }
+  
   //let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
   let fname = getSettingsFilename();
   let remote = null, remoteObj = {};
-  try { remote = await ghFetch(fname); } catch {}
+  if(fname)
+    try { remote = await ghFetch(fname); } catch {}
   if (remote && remote.content) {
     try { remoteObj = JSON.parse(base64decode(remote.content)); } catch {}
   }
@@ -610,6 +690,7 @@ function saveUserData(){
 function getSettingsFilename() {
   // only add “abc_” if path is non-empty
   const prefix = path ? `${path.replace(/\//g,'_')}_` : '';
+  if (!path || !prefix) return null
   return `user_settings/${config.user}/${prefix}user.json`;
 }
 
@@ -1015,6 +1096,18 @@ function showReviewItem(){
   let {ctx,rec} = reviewList[reviewIdx];
   let cat = document.getElementById('review-category').value;
   let qdict = (categories[cat]||[]).find(q=>q.question_context===ctx);
+
+  if (!qdict) {
+    // Handle missing question gracefully!
+    document.getElementById('review-meta').textContent = 'Question not found in this category.';
+    document.getElementById('review-question').textContent = ctx;
+    document.getElementById('review-choices').innerHTML = '';
+    document.getElementById('review-explanation').innerHTML = '';
+    document.getElementById('review-star').textContent = rec.is_confidence ? '★':'☆';
+    document.getElementById('review-prog').textContent = `${reviewIdx+1}/${reviewList.length}`;
+    return;
+  }
+
   document.getElementById('review-prog').textContent = `${reviewIdx+1}/${reviewList.length}`;
   let tm = rec.answer_time||0, dt = rec.answer_date||"", ok = rec.is_correct;
   let tstr = tm>=60 ? `${Math.floor(tm/60)}m ${tm%60}s` : `${tm}s`;
@@ -1120,6 +1213,10 @@ function loadResetCategories(){
 document.getElementById('reset-all').onclick = function(){
   if(confirm("Are you sure you want to reset ALL progress?")){
     userData = {}; saveUserData();
+    // --- Push to GitHub after reset ---
+    let fname = getSettingsFilename();
+    if(fname)
+      ghPut(fname, userData);
     alert("Progress reset.");
   }
 };
@@ -1128,6 +1225,11 @@ document.getElementById('reset-cat-btn').onclick = function(){
   if(cat && confirm(`Reset progress for category "${cat}"?`)){
     if(userData[cat]) delete userData[cat];
     saveUserData();
+
+    // --- Push to GitHub after reset ---
+    let fname = getSettingsFilename();
+    if(fname)
+      ghPut(fname, userData);
     alert("Category progress reset.");
   }
 };
@@ -1143,7 +1245,8 @@ function switchTab(i){
   if(i!=='test'&&i!=='exam'&&dirtyPush){
     //let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
     let fname = getSettingsFilename();
-    ghPut(fname, userData);
+    if (fname)
+      ghPut(fname, userData);
     dirtyPush=false;
   }
   if(i==='analyze') analyze();
@@ -1167,12 +1270,27 @@ async function loadRootFolders(){
   document.getElementById('config-status').textContent = "Ready — browse folders below.";
 }
 function renderList(id,items,fn){
+  /*
   const ul=document.getElementById(id);ul.innerHTML='';
   items.forEach(i=>{
     const li=document.createElement('li');
     li.textContent=i.name;
     if(i.type==='dir')li.classList.add('folder');
     li.onclick=()=>fn(i.name);
+    ul.appendChild(li);
+  });
+  */
+  const ul = document.getElementById(id); ul.innerHTML = '';
+  items.forEach(i => {
+    const li = document.createElement('li');
+    li.textContent = i.name;
+    if (i.type === 'dir') li.classList.add('folder');
+    li.onclick = function() {
+      // Remove 'selected' from all siblings
+      ul.querySelectorAll('.selected').forEach(e => e.classList.remove('selected'));
+      li.classList.add('selected');
+      fn(i.name);
+    };
     ul.appendChild(li);
   });
 }
@@ -1272,6 +1390,23 @@ window.onload = async function() {
   }
 
   
+  document.getElementById('sync-categories').onclick = async function() {
+  // Optionally show a loading indicator
+  document.getElementById('config-status').textContent = "Syncing categories from GitHub...";
+  
+  // Clear any cached categories
+  if (typeof clearCategoriesCache === 'function') clearCategoriesCache();
+  categories = {};
+  categoryFiles = [];
+
+  // Force reload categories from GitHub
+  try {
+    await loadFolders();
+    document.getElementById('config-status').textContent = "Categories synced!";
+  } catch (e) {
+    document.getElementById('config-status').textContent = "Failed to sync categories.";
+  }
+};
 
   document.getElementById('save-token').onclick = function() {
     setUserFromInput();
@@ -1295,6 +1430,9 @@ window.onload = async function() {
     // Make sure we re-load branch on next init
     localStorage.removeItem('default_branch');
 
+    document.getElementById('config-status').textContent =
+      `Fetching data..`;
+
     init();
   };
   document.getElementById('start-test').onclick = startTest;
@@ -1316,7 +1454,8 @@ window.onload = async function() {
       //let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
       //let fname = `user_settings/${config.user}/${(path||'').replace(/\//g,'_')}_user.json`;
       let fname = getSettingsFilename();
-      ghPut(fname, userData);
+      if(fname)
+        ghPut(fname, userData);
     }
   });
 
