@@ -5,9 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PMI Quiz Suite (Web)</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    body { 
+      font-family: Arial, sans-serif; margin: 0 auto; padding: 0; 
+      max-width: 800px;
+      background: #FAFAFA      ;
+      color: #222;
+    }
     nav { display: flex; background: #333; color: #fff; }
-    nav button { flex: 1; padding: 12px; background: none; border: none; color: inherit; cursor: pointer; }
+    nav button { flex: 1; padding: 5px; background: none; border: none; color: inherit; cursor: pointer; }
     nav button.active { background: #555; }
     /* section { display: none; padding: 20px; } */
   /* less top/bottom padding, same left/right */
@@ -29,7 +34,7 @@
     .choice-correct { color: #007700; font-weight: bold; }
     .choice-selected { color: #bb0000; font-weight: bold; }
     .choice-correct.choice-selected { color: #0066aa; }
-    #token-section { margin: 16px 0; }
+    #token-section { margin: 10px 0; }
     .star-btn { font-size: 1.3em; background: none; border: none; cursor: pointer; }
     #test-status, #exam-status { min-height: 1.2em; }
     #test-explanation, #review-explanation {
@@ -50,8 +55,8 @@
     #review-meta { margin: 8px 0; color: #333; }
     #review-choices label, #review-choices span { padding-left: 10px; }
     #config-cats label { display: block; margin: 3px 0; }
-    #review-category { min-width: 110px; }
-    #review-filter { min-width: 130px; }
+    #review-category { min-width: 250px; }
+    #review-filter { min-width: 250px; }
     #exam-nav { margin: 14px 0 10px 0; }
     #exam-nav button { width: 32px; height: 32px; margin: 2px; font-weight: bold; border-radius: 6px; border: 1px solid #aaa; }
     #exam-nav .answered { background: #D1FFD1; border-color: #1b7e00; }
@@ -80,10 +85,28 @@
   display: none;
 }
 
+/*
+#mode-tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+ 
+  display: flex;
+  justify-content: center;
+  padding: 3px 0;
+  box-shadow: 0 -2px 6px rgba(0,0,0,0.05);
+}
+body, #main-content {
+  margin-bottom: 10px; 
+}
+*/
+
   </style>
 </head>
 <body>
-  <nav>
+  <nav id="mode-tabs">
     <button id="tab-config" class="active">Config</button>
     <button id="tab-test">Test</button>
     <button id="tab-exam">Exam</button>
@@ -176,7 +199,7 @@
   <section id="review">
     <h2>Review Mode</h2>
     <div>
-      <label>Filter:
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <label>Filter:
         <select id="review-filter">
           <option value="all">All quiz</option>
           <option value="answered">Answered (Any)</option>
