@@ -438,6 +438,8 @@ async function init(){
       branch=(await r.json()).default_branch;
       // store it for next time
       localStorage.setItem('default_branch', branch);
+
+      document.getElementById('config-status').textContent = "Ready — browse folders below.";
     } catch {
       document.getElementById('config-status').textContent = "Failed to load repo info. Check your token/repo.";
       return;
@@ -1149,6 +1151,8 @@ async function loadRootFolders(){
     localStorage.setItem('lastFolder', n);
     loadFolders();
   });
+
+  document.getElementById('config-status').textContent = "Ready — browse folders below.";
 }
 function renderList(id,items,fn){
   const ul=document.getElementById(id);ul.innerHTML='';
