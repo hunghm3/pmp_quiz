@@ -64,6 +64,13 @@
       #chart { width: 100% !important; height: 240px !important; }
       #exam-nav button { width: 24px; height: 24px; font-size: 13px; }
     }
+
+    /* give your control buttons a 60px “cushion” from the top */
+#test-confirm,
+#exam-next,
+#review-next {
+  scroll-margin-top: 110px;
+}
    
 
   </style>
@@ -607,11 +614,16 @@ function getSettingsFilename() {
 }
 
 // —— scroll element into view if it overflows the viewport ——  
-function scrollIfOverflow(el) {
+function scrollIfOverflow(el, controlId) {
   const rect = el.getBoundingClientRect();
-  // if element’s full height is not visible below its top, scroll it into view
-  if (el.scrollHeight > window.innerHeight - rect.top) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  if (rect.bottom > window.innerHeight) {
+    const ctrl = controlId && document.getElementById(controlId);
+    if (ctrl) {
+      // scroll the control to the top of the viewport
+      ctrl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 }
 
@@ -695,7 +707,7 @@ function showTestQuestion(){
   saveTestSession();
 
   // ensure the question is fully in view
-  scrollIfOverflow(document.getElementById('test-question'));
+  scrollIfOverflow(document.getElementById('test-question'), 'test-confirm');
 
 }
 function confirmTestAnswer(){
@@ -739,7 +751,7 @@ function confirmTestAnswer(){
   dirtyPush = true;
   if (timerJob) clearInterval(timerJob);
 
-  scrollIfOverflow(document.getElementById('test-explanation'));
+  scrollIfOverflow(document.getElementById('test-explanation'),'test-confirm');
 }
 function isStarred(q){
   let cat = q._cat, ctx = q.question_context;
@@ -846,7 +858,7 @@ function showExamQuestion(){
   document.getElementById('exam-status').textContent = "";
   buildExamNav();
   saveExamSession();
-  scrollIfOverflow(document.getElementById('exam-question'));
+  scrollIfOverflow(document.getElementById('exam-question'),'exam-next');
 }
 function buildExamNav(){
   let nav = document.getElementById('exam-nav'); nav.innerHTML = "";
@@ -1032,7 +1044,7 @@ function showReviewItem(){
   document.getElementById('review-explanation').innerHTML =
     `<strong>Answer: ${correctArr.join(', ')}</strong><br><span style="font-weight:bold;color:#1a3ea5;">Solution:</span><br>${ex}`;
   saveReviewSession();
-  scrollIfOverflow(document.getElementById('review-question'));
+  scrollIfOverflow(document.getElementById('review-question'),'review-next');
 }
 document.getElementById('review-prev').onclick = function(){
   if(reviewList.length) { reviewIdx=(reviewIdx-1+reviewList.length)%reviewList.length; showReviewItem(); }
