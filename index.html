@@ -845,6 +845,13 @@ function confirmTestAnswer(){
  document.getElementById('test-explanation').innerHTML =
    `<strong>Answer: ${correctArr.join(', ')}</strong><br><br>${formatted}`;
 
+  // Disable all answer inputs after confirming
+  const inputs = document.querySelectorAll('input[name="test-choice"]');
+  inputs.forEach(input => input.disabled = true);
+
+  // Optionally, also disable the confirm button
+  document.getElementById('test-confirm').disabled = true;
+
   document.getElementById('test-confirm').textContent = 'Next';
   document.getElementById('test-confirm').disabled = false;
   document.getElementById('test-confirm').onclick = function(){
