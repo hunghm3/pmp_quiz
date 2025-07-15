@@ -310,10 +310,15 @@ function loadUserFromStorage() {
 
 // ========== GitHub API with Conflict Handling ==========
 async function ghFetch(p){
+
+  //console.log("ghFetch : ", p);
+    
+
   if(!config.token) throw "GitHub token not set!";
   // 1) try cache first
-  let cached = loadJsonCache(p);
-  if (cached) return cached;
+  //let cached = loadJsonCache(p);
+  //if (cached) return cached;
+
 
   const r=await fetch(`${api}/repos/${config.owner}/${config.repo}/contents/${p}?ref=${branch}`,{
     headers:{Authorization:`token ${config.token}`}
@@ -329,13 +334,35 @@ async function ghFetch(p){
   const json = await r.json();
   // 2) store in cache
   saveJsonCache(p, json);
-  return r.json();
+  //return r.json();
+  return json;
 }
 async function ghPut(p,obj){
   if(!config.token) throw "GitHub token not set!";
   obj.setting_time = Date.now();
   let sha=null, remote=null, merged=false;
-  try { remote = await ghFetch(p); sha = remote.sha; } catch {}
+  try { 
+    remote = await ghFetch(p); sha = remote.sha; 
+    
+    console.log("Fetched GitHub object:", p);
+    console.log("Fetched GitHub sha:", sha);
+
+  } 
+  catch {
+    document.getElementById('config-status').textContent = "[ERROR] Cannot fetch, retry..";
+    // 2. Pull latest from GitHub
+            let remoteLatest = await ghFetch(p);
+            if (remoteLatest && remoteLatest.content) {
+              try {
+                userData = JSON.parse(base64decode(remoteLatest.content));
+                localStorage.setItem('userData', JSON.stringify(userData));
+              } catch (e) {
+                document.getElementById('config-status').textContent = "[ERROR] failed to fetch..";
+                return;
+              }
+            }
+  }
+
   if (remote && remote.content) {
     let remoteObj = {};
     try { remoteObj = JSON.parse(base64decode(remote.content)); } catch {}
@@ -1470,7 +1497,7 @@ window.onload = async function() {
   };
   document.getElementById('start-test').onclick = startTest;
   document.getElementById('start-exam').onclick = startExam;
-  loadRootFolders();
+  await loadRootFolders();
   
   // restore last folder if we have one
   const last = localStorage.getItem('lastFolder');
