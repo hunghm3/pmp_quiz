@@ -9,7 +9,15 @@
     nav { display: flex; background: #333; color: #fff; }
     nav button { flex: 1; padding: 12px; background: none; border: none; color: inherit; cursor: pointer; }
     nav button.active { background: #555; }
-    section { display: none; padding: 20px; }
+    /* section { display: none; padding: 20px; } */
+  /* less top/bottom padding, same left/right */
+  section { display: none; padding: 10px 20px; }
+  /* remove extra space above the H2 and tighten below */
+  section > h2 {
+    margin-top: 0;
+    margin-bottom: 0.5em;
+  }
+
     section.active { display: block; }
     .status { margin: 10px 0; color: #555; }
     .btn { padding: 8px 16px; margin: 10px 5px; }
@@ -24,7 +32,20 @@
     #token-section { margin: 16px 0; }
     .star-btn { font-size: 1.3em; background: none; border: none; cursor: pointer; }
     #test-status, #exam-status { min-height: 1.2em; }
-    #test-explanation, #review-explanation { background: #f1f1f1; padding: 10px; min-height: 40px; margin-top: 10px; }
+    #test-explanation, #review-explanation {
+      /* background: #f1f1f1; padding: 10px; min-height: 40px; margin-top: 10px; */
+  background: #f1f1f1;
+  padding: 10px;
+  min-height: 40px;
+  margin-top: 10px;
+  /* preserve newlines and collapse sequences of spaces */
+  white-space: pre-wrap;
+      }
+/* preserve newlines in question text too */
+#test-question, #exam-question, #review-question {
+  white-space: pre-wrap;
+}
+
     #review-explanation strong { display: block; margin-bottom: 8px; }
     #review-meta { margin: 8px 0; color: #333; }
     #review-choices label, #review-choices span { padding-left: 10px; }
@@ -43,6 +64,8 @@
       #chart { width: 100% !important; height: 240px !important; }
       #exam-nav button { width: 24px; height: 24px; font-size: 13px; }
     }
+   
+
   </style>
 </head>
 <body>
@@ -58,9 +81,12 @@
   <section id="config" class="active">
     <h2>Configuration</h2>
     <div id="token-section">
-      <label>GitHub Token: <input type="password" id="gh-token" placeholder="Enter your GitHub PAT" style="width:300px;"></label>
+    <label>Username: <input type="text" id="gh-username" placeholder="Enter your GitHub username" style="width:200px;"></label><br>
+    &nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;<span id="user-status" class="status"></span><br>
+      <label>Token:  &nbsp;&nbsp;&nbsp;&nbsp; &nbsp;  <input type="password" id="gh-token" placeholder="Enter your GitHub PAT" style="width:200px;"></label>
+      <br>
       <button class="btn" id="save-token">Save Token</button>
-      <span id="token-status" class="status"></span>
+      &nbsp;&nbsp;<span id="token-status" class="status"></span>
     </div>
     <button class="btn" id="fetch-json">Fetch</button>
     <span id="config-status" class="status"></span>
@@ -68,14 +94,22 @@
     <div id="file-section" class="hidden">
       <h3>Categories</h3>
       <div id="config-cats"></div>
+      <br><br>
       <label><input type="checkbox" id="randomize" checked> Randomize</label>
       <label><input type="checkbox" id="only-incorrect"> Incorrect only</label>
-      <label>Time per Q: <input type="number" id="qtime" min="10" max="180" step="5" value="90"> s</label>
+  <!--    <label>Time per Q: <input type="number" id="qtime" min="10" max="180" step="5" value="90"> s</label> -->
+      <br>
+    <label>
+      Time per Q:
+      <input type="range" id="qtime" min="10" max="180" step="5" value="90">
+      <span id="qtime-display">90</span> s
+    </label>
+    <br>
       <button class="btn" id="start-test">Test!</button>
       <button class="btn" id="start-exam">Exam</button>
     </div>
     <div id="reset-section">
-      <button class="btn" id="reset-all">Reset All Progress</button>
+      <button class="btn" id="reset-all">Reset All Progress</button> <br>
       <select id="reset-cat"></select>
       <button class="btn" id="reset-cat-btn">Reset Category</button>
     </div>
@@ -92,8 +126,10 @@
     <hr style="margin:10px 0 16px 0;">
     <div id="test-question" style="margin: 10px 0; font-size: 1.18em;"></div>
     <form id="test-choices"></form>
-    <button class="star-btn" id="test-star" title="Toggle Star">☆</button>
+    
+    <br>
     <button class="btn" id="test-confirm" disabled>Confirm</button>
+    <button class="star-btn" id="test-star" title="Toggle Star">☆</button>
     <span id="test-status"></span>
     <div id="test-explanation"></div>
   </section>
@@ -112,8 +148,9 @@
     <hr style="margin:10px 0 16px 0;">
     <div id="exam-question" style="margin: 10px 0; font-size: 1.18em;"></div>
     <form id="exam-choices"></form>
-    <button class="star-btn" id="exam-star" title="Toggle Star">☆</button>
+    <br>
     <button class="btn" id="exam-next">Next</button>
+    <button class="star-btn" id="exam-star" title="Toggle Star">☆</button>
     
   </section>
 
@@ -134,6 +171,7 @@
       <label>Category:
         <select id="review-category"></select>
       </label>
+      <br>
       <button class="btn" id="review-prev">Previous</button>
       <button class="btn" id="review-next">Next</button>
       <span id="review-prog"></span>
@@ -155,13 +193,31 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+// ====== Caching categories and userData ======
+let cachedCategories = null;
+let cachedUserData = null;
+
+// —— Generic JSON cache helpers —— 
+function saveJsonCache(p, data) { 
+  localStorage.setItem(`jsonCache_${p}`, JSON.stringify(data)); 
+}
+function loadJsonCache(p) {
+  try { return JSON.parse(localStorage.getItem(`jsonCache_${p}`)); }
+  catch { return null; }
+}
+function clearJsonCache() {
+  Object.keys(localStorage).forEach(k => {
+    if (k.startsWith('jsonCache_')) localStorage.removeItem(k);
+  });
+}
+
 // ========== Utility (base64, date) ==========
 function base64encode(str) { return btoa(unescape(encodeURIComponent(str))); }
 function base64decode(str) { return decodeURIComponent(escape(atob(str))); }
 function nowIso() { return new Date().toISOString(); }
 
 // ========== Global State ==========
-const config = { token: '', owner: 'hunghm3', repo: 'pmi_quiz' };
+const config = {user:'', token: '', owner: 'hunghm3', repo: 'pmi_quiz' };
 const api = 'https://api.github.com';
 let branch='main', path='';
 let categories={}, categoryFiles=[], quizSettings={}, userData={}, pool=[], idx=0, startTime=0, timerJob=null, dirtyPush=false;
@@ -191,13 +247,40 @@ function loadToken() {
   }
 }
 
+function setUserFromInput() {
+  const u = document.getElementById('gh-username').value.trim();
+  if (!u) {
+    document.getElementById('user-status').textContent = "Username is empty.";
+    return;
+  }
+  config.user = u;
+  localStorage.setItem('gh_user', u);
+  document.getElementById('user-status').textContent = "Username saved!";
+}
+function loadUserFromStorage() {
+  const u = localStorage.getItem('gh_user');
+  if (u) {
+    config.user = u;
+    document.getElementById('gh-username').value = u;
+    document.getElementById('user-status').textContent = "Username loaded.";
+  }
+}
+
 // ========== GitHub API with Conflict Handling ==========
 async function ghFetch(p){
   if(!config.token) throw "GitHub token not set!";
+  // 1) try cache first
+  let cached = loadJsonCache(p);
+  if (cached) return cached;
+
   const r=await fetch(`${api}/repos/${config.owner}/${config.repo}/contents/${p}?ref=${branch}`,{
     headers:{Authorization:`token ${config.token}`}
   });
   if(!r.ok) throw'Fetch failed';
+
+  const json = await r.json();
+  // 2) store in cache
+  saveJsonCache(p, json);
   return r.json();
 }
 async function ghPut(p,obj){
@@ -245,6 +328,46 @@ async function ghPut(p,obj){
   if (merged) alert("A newer version was found in GitHub, your local changes were not pushed.");
 }
 
+function renderConfigCategories() {
+  // build the checkbox list
+  const catList = Object.keys(categories).sort();
+  let html = `<label><input type="checkbox" id="cat-all"> All</label>`;
+  catList.forEach(cat => {
+    html += `<label><input type="checkbox" class="cat-cb" value="${cat}"> ${cat} (${categories[cat].length})</label>`;
+  });
+  document.getElementById('config-cats').innerHTML = html;
+
+  // —— restore selected categories from last session ——
+  const saved = JSON.parse(localStorage.getItem('quizSettings') || '{}');
+  if (saved.selectedCats?.length) {
+      document.querySelectorAll('.cat-cb').forEach(cb => {
+        cb.checked = saved.selectedCats.includes(cb.value);
+        });
+  }
+
+  // keep the “All” box in sync
+  const allChecked = document.querySelectorAll('.cat-cb:checked').length === document.querySelectorAll('.cat-cb').length;
+  document.getElementById('cat-all').checked = allChecked;
+
+  // wire up handlers
+  document.getElementById('cat-all').onchange = function(){
+    document.querySelectorAll('.cat-cb').forEach(cb => cb.checked = this.checked);
+    saveQuizSettings();
+  };
+  document.querySelectorAll('.cat-cb').forEach(cb => {
+    cb.onchange = function(){
+      if (!this.checked) document.getElementById('cat-all').checked = false;
+      saveQuizSettings();
+    };
+  });
+
+  // reveal the section and dropdowns
+  document.getElementById('file-section').classList.remove('hidden');
+  loadReviewCategories();
+  loadResetCategories();
+}
+
+
 // ========== CONFIG TAB ==========
 async function loadFolders(){
   categories = {};
@@ -253,6 +376,7 @@ async function loadFolders(){
   let it=await ghFetch(path||'');
   let files=it.filter(i=>i.type==='file'&&i.name.endsWith('.json'));
   categoryFiles = files.map(f=>f.name);
+  localStorage.setItem('lastFolderFiles', JSON.stringify(categoryFiles));
   let catList = [];
   for (let file of files) {
     let d = await ghFetch(`${path}/${file.name}`);
@@ -263,39 +387,87 @@ async function loadFolders(){
   }
   let html = `<label><input type="checkbox" id="cat-all"> All</label>`;
   catList.forEach(cat=>{
-    html += `<label><input type="checkbox" class="cat-cb" value="${cat}" checked> ${cat} (${categories[cat].length})</label>`;
+    //html += `<label><input type="checkbox" class="cat-cb" value="${cat}" checked> ${cat} (${categories[cat].length})</label>`;
+    html += `<label><input type="checkbox" class="cat-cb" value="${cat}" > ${cat} (${categories[cat].length})</label>`;
   });
   document.getElementById('config-cats').innerHTML = html;
   document.getElementById('cat-all').onchange = function(){
-    document.querySelectorAll('.cat-cb').forEach(cb=>cb.checked=this.checked);
+    //document.querySelectorAll('.cat-cb').forEach(cb=>cb.checked=this.checked);
+    document.querySelectorAll('.cat-cb').forEach(cb=>{
+      cb.checked = this.checked;
+    });
+    saveQuizSettings();
   };
+  /*
   document.querySelectorAll('.cat-cb').forEach(cb=>{
     cb.onchange = function(){
       if(!this.checked) document.getElementById('cat-all').checked = false;
     };
   });
-  document.getElementById('file-section').classList.remove('hidden');
-  loadReviewCategories();
-  loadResetCategories();
+  */
+  document.querySelectorAll('.cat-cb').forEach(cb=>{
+    cb.onchange = function(){
+      if (!this.checked) document.getElementById('cat-all').checked = false;
+      saveQuizSettings();
+    };
+  });
+
+
+  //document.getElementById('file-section').classList.remove('hidden');
+  //loadReviewCategories();
+  //loadResetCategories();
+  // delegate rendering + handlers
+  renderConfigCategories();
+
+   // Save to cache after fetching all categories
+  saveCategoriesCache(categories);
 }
 async function init(){
-  try {
-    document.getElementById('config-status').textContent = "Loading branch info...";
-    const r=await fetch(`${api}/repos/${config.owner}/${config.repo}`,{
-      headers:{Authorization:`token ${config.token}`}
-    });
-    branch=(await r.json()).default_branch;
-  } catch {
-    document.getElementById('config-status').textContent = "Failed to load repo info. Check your token/repo.";
-    return;
+  // 1) if we've already stored a default_branch, just use it
+  const cached = localStorage.getItem('default_branch');
+  if (cached) {
+    branch = cached;
+    document.getElementById('config-status').textContent =
+      `Using cached branch “${branch}”.`;
+  } else {
+    try {
+      document.getElementById('config-status').textContent = "Loading branch info...";
+      const r=await fetch(`${api}/repos/${config.owner}/${config.repo}`,{
+        headers:{Authorization:`token ${config.token}`}
+      });
+      branch=(await r.json()).default_branch;
+      // store it for next time
+      localStorage.setItem('default_branch', branch);
+    } catch {
+      document.getElementById('config-status').textContent = "Failed to load repo info. Check your token/repo.";
+      return;
+    }
   }
   await loadFolders();
   let saved = JSON.parse(localStorage.getItem('quizSettings')||'{}');
   document.getElementById('randomize').checked = saved.randomize ?? true;
   document.getElementById('only-incorrect').checked = saved.onlyIncorrect ?? false;
-  document.getElementById('qtime').value = saved.qtime ?? 90;
+  //document.getElementById('qtime').value = saved.qtime ?? 90;
+  document.getElementById('qtime-display').textContent = document.getElementById('qtime').value;
+
+  // restore previously‐checked categories
+  if (saved.selectedCats?.length) {
+    document.querySelectorAll('.cat-cb').forEach(cb=>{
+      cb.checked = saved.selectedCats.includes(cb.value);
+    });
+    // update “All” checkbox if everything is checked
+    document.getElementById('cat-all').checked =
+      document.querySelectorAll('.cat-cb:checked').length ===
+      document.querySelectorAll('.cat-cb').length;
+  }
+  
   await syncUserDataOnLoad();
-  setTimeout(tryRestoreSession, 500);
+  
+  document.getElementById('config-status').textContent = "Ready — browse folders below.";
+
+  // restore whichever tab you were on last, right away
+  tryRestoreSession();
+
 }
 function saveQuizSettings(){
   quizSettings = {
@@ -305,11 +477,24 @@ function saveQuizSettings(){
     selectedCats: Array.from(document.querySelectorAll('.cat-cb')).filter(cb=>cb.checked).map(cb=>cb.value)
   };
   localStorage.setItem('quizSettings', JSON.stringify(quizSettings));
+
+  
 }
+
+// update display + persist whenever the slider moves
+const qtimeSlider = document.getElementById('qtime');
+const qtimeDisplay = document.getElementById('qtime-display');
+
+qtimeSlider.oninput = () => {
+  qtimeDisplay.textContent = qtimeSlider.value;
+  saveQuizSettings();
+};
+
 
 // ========== GITHUB SYNC & CONFLICTS ==========
 async function syncUserDataOnLoad(){
-  let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
+  //let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
+  let fname = getSettingsFilename();
   let remote = null, remoteObj = {};
   try { remote = await ghFetch(fname); } catch {}
   if (remote && remote.content) {
@@ -326,6 +511,12 @@ async function syncUserDataOnLoad(){
     userData = remoteObj; settingTime = remoteTime;
     localStorage.setItem('userData', JSON.stringify(userData));
   }
+
+  if (!userData || Object.keys(userData).length === 0) {
+  try { userData = JSON.parse(localStorage.getItem('userData') || '{}'); }
+  catch { userData = {}; }
+  cachedUserData = userData;
+}
 }
 
 // ========== SESSION MANAGEMENT ==========
@@ -372,6 +563,30 @@ function saveTestSession() { saveSession('test', {idx, pool}); }
 function saveExamSession() { saveSession('exam', {examIdx, examQuestions, examAnswers, examMarked, examStartTime, examMaxTime}); }
 function saveReviewSession() { saveSession('review', {reviewIdx, reviewList}); }
 
+
+// Cache categories to localStorage/memory
+function saveCategoriesCache(cats) {
+  cachedCategories = cats;
+  localStorage.setItem('categories', JSON.stringify(cats));
+}
+function loadCategoriesCache() {
+  if (!cachedCategories) {
+    try {
+      cachedCategories = JSON.parse(localStorage.getItem('categories') || '{}');
+    } catch { cachedCategories = {}; }
+  }
+  return cachedCategories;
+}
+function clearCategoriesCache() {
+  cachedCategories = null;
+  localStorage.removeItem('categories');
+}
+function clearUserDataCache() {
+  cachedUserData = null;
+  localStorage.removeItem('userData');
+}
+
+
 // ========== TEST TAB ==========
 function getSelectedCats(){
   return Array.from(document.querySelectorAll('.cat-cb')).filter(cb=>cb.checked).map(cb=>cb.value);
@@ -379,8 +594,25 @@ function getSelectedCats(){
 function saveUserData(){
   userData.setting_time = Date.now();
   localStorage.setItem('userData', JSON.stringify(userData));
+  cachedUserData = userData;
   dirtyPush = true;
 }
+
+function getSettingsFilename() {
+  // only add “abc_” if path is non-empty
+  const prefix = path ? `${path.replace(/\//g,'_')}_` : '';
+  return `user_settings/${config.user}/${prefix}user.json`;
+}
+
+// —— scroll element into view if it overflows the viewport ——  
+function scrollIfOverflow(el) {
+  const rect = el.getBoundingClientRect();
+  // if element’s full height is not visible below its top, scroll it into view
+  if (el.scrollHeight > window.innerHeight - rect.top) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }
+}
+
 function startTest(){
   clearSession();
   saveQuizSettings();
@@ -398,7 +630,7 @@ function startTest(){
           pool.push({...q});
         }
       } else {
-        if (ctx in recs) continue;
+        //if (ctx in recs) continue;
         q["_cat"] = c;
         pool.push({...q});
       }
@@ -414,7 +646,13 @@ function showTestQuestion(){
   let q = pool[idx];
   document.getElementById('test-cat').textContent = q._cat;
   document.getElementById('test-progress').textContent = `${idx+1}/${pool.length}`;
-  document.getElementById('test-question').textContent = q.question_context;
+ // convert every newline into a <br> before injecting
+ const formatted = q.question_context.replace(/\n/g, '<br>');
+
+  //document.getElementById('test-question').textContent = q.question_context;
+  document.getElementById('test-question').innerHTML  = formatted;
+
+
   let ch=document.getElementById('test-choices'); ch.innerHTML='';
   let ans = q.question_answer;
   let correctArr = Array.isArray(ans) ? ans.map(String) :
@@ -448,6 +686,10 @@ function showTestQuestion(){
     document.getElementById('test-timer').textContent = `Time: ${formatDuration(elapsed)}`;
   }, 500);
   saveTestSession();
+
+  // ensure the question is fully in view
+  scrollIfOverflow(document.getElementById('test-question'));
+
 }
 function confirmTestAnswer(){
   let q = pool[idx];
@@ -470,8 +712,13 @@ function confirmTestAnswer(){
   saveUserData();
   document.getElementById('test-status').textContent = ok ? 'Correct' : 'Wrong';
   document.getElementById('test-status').style.color = ok ? 'green' : 'red';
-  document.getElementById('test-explanation').innerHTML =
-    `<strong>Answer: ${correctArr.join(', ')}</strong><br>${ex}`;
+ // document.getElementById('test-explanation').innerHTML =
+ //   `<strong>Answer: ${correctArr.join(', ')}</strong><br>${ex}`;
+ // convert every newline into a <br> before injecting
+ const formatted = ex.replace(/\n/g, '<br>');
+ document.getElementById('test-explanation').innerHTML =
+   `<strong>Answer: ${correctArr.join(', ')}</strong><br><br>${formatted}`;
+
   document.getElementById('test-confirm').textContent = 'Next';
   document.getElementById('test-confirm').disabled = false;
   document.getElementById('test-confirm').onclick = function(){
@@ -484,6 +731,8 @@ function confirmTestAnswer(){
   };
   dirtyPush = true;
   if (timerJob) clearInterval(timerJob);
+
+  scrollIfOverflow(document.getElementById('test-explanation'));
 }
 function isStarred(q){
   let cat = q._cat, ctx = q.question_context;
@@ -521,7 +770,7 @@ document.getElementById('test-confirm').onclick = function(){
   document.getElementById('test-status').textContent = ok ? 'Correct' : 'Wrong';
   document.getElementById('test-status').style.color = ok ? 'green' : 'red';
   document.getElementById('test-explanation').innerHTML =
-    `<strong>Answer: ${correctArr.join(', ')}</strong><br>${ex}`;
+    `<strong>Answer: ${correctArr.join(', ')}</strong><br><br>${ex}`;
   document.getElementById('test-confirm').textContent = 'Next';
   document.getElementById('test-confirm').disabled = false;
   document.getElementById('test-confirm').onclick = function(){
@@ -562,7 +811,10 @@ function showExamQuestion(){
   let q = examQuestions[examIdx];
   document.getElementById('exam-cat').textContent = q._cat;
   document.getElementById('exam-progress').textContent = `${examIdx+1}/${examQuestions.length}`;
-  document.getElementById('exam-question').textContent = q.question_context;
+
+  const formatted = q.question_context.replace(/\n/g, '<br>');
+  //document.getElementById('exam-question').textContent = q.question_context;
+  document.getElementById('exam-question').innerHTML  = formatted;
   let ch=document.getElementById('exam-choices'); ch.innerHTML='';
   let ans = q.question_answer;
   let correctArr = Array.isArray(ans) ? ans.map(String) :
@@ -587,6 +839,7 @@ function showExamQuestion(){
   document.getElementById('exam-status').textContent = "";
   buildExamNav();
   saveExamSession();
+  scrollIfOverflow(document.getElementById('exam-question'));
 }
 function buildExamNav(){
   let nav = document.getElementById('exam-nav'); nav.innerHTML = "";
@@ -748,7 +1001,10 @@ function showReviewItem(){
   let tstr = tm>=60 ? `${Math.floor(tm/60)}m ${tm%60}s` : `${tm}s`;
   document.getElementById('review-meta').textContent = `Answered: ${dt}   Time: ${tstr}   ${ok===true?'Correct':ok===false?'Incorrect':''}`;
   document.getElementById('review-star').textContent = rec.is_confidence ? '★':'☆';
-  document.getElementById('review-question').textContent = ctx;
+
+  const formatted = ctx.replace(/\n/g, '<br>');
+  //document.getElementById('review-question').textContent = ctx;
+  document.getElementById('review-question').innerHTML  = formatted;
   let ch = document.getElementById('review-choices'); ch.innerHTML='';
   let ans = qdict.question_answer;
   let correctArr = Array.isArray(ans) ? ans.map(String) :
@@ -769,6 +1025,7 @@ function showReviewItem(){
   document.getElementById('review-explanation').innerHTML =
     `<strong>Answer: ${correctArr.join(', ')}</strong><br><span style="font-weight:bold;color:#1a3ea5;">Solution:</span><br>${ex}`;
   saveReviewSession();
+  scrollIfOverflow(document.getElementById('review-question'));
 }
 document.getElementById('review-prev').onclick = function(){
   if(reviewList.length) { reviewIdx=(reviewIdx-1+reviewList.length)%reviewList.length; showReviewItem(); }
@@ -865,7 +1122,8 @@ function switchTab(i){
     b.classList.toggle('active',b.id===`tab-${i}`)
   );
   if(i!=='test'&&i!=='exam'&&dirtyPush){
-    let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
+    //let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
+    let fname = getSettingsFilename();
     ghPut(fname, userData);
     dirtyPush=false;
   }
@@ -883,6 +1141,7 @@ async function loadRootFolders(){
   let it=await ghFetch('');
   renderList('folder-list',it.filter(i=>i.type==='dir'),n=>{
     path=n;
+    localStorage.setItem('lastFolder', n);
     loadFolders();
   });
 }
@@ -949,25 +1208,97 @@ function formatDuration(seconds){
   return out.join(' ');
 }
 
+function setUserFromInput() {
+  const u = document.getElementById('gh-username').value.trim();
+  if (!u) {
+    document.getElementById('user-status').textContent = "Username is empty.";
+    return;
+  }
+  config.user = u;
+  localStorage.setItem('gh_user', u);
+  document.getElementById('user-status').textContent = "Username saved!";
+}
+
+function loadUserFromStorage() {
+  const u = localStorage.getItem('gh_user');
+  if (u) {
+    config.user = u;
+    document.getElementById('gh-username').value = u;
+    document.getElementById('user-status').textContent = "Username loaded.";
+  }
+}
+
 // ========== Startup ==========
-window.onload = function() {
+window.onload = async function() {
+  loadUserFromStorage();
   loadToken();
+
+  // If a token is already stored, immediately initialize (load settings + restore session)
+  if (config.token) {
+     await init();
+  }
+
+  // Load cached categories if available
+  categories = loadCategoriesCache();
+  if (Object.keys(categories).length > 0) {
+    // Optionally pre-render UI from cache here, if you want fast first render
+    loadReviewCategories();
+    loadResetCategories();
+   // render the Config tab from cache as well
+   renderConfigCategories();
+  }
+
+  
+
   document.getElementById('save-token').onclick = function() {
+    setUserFromInput();
     setTokenFromInput();
     init();
   };
-  document.getElementById('fetch-json').onclick = function(){
+  document.getElementById('fetch-json').onclick = async function(){
+    // Clear all cached data before fetching new stuff
+    clearCategoriesCache();
+    clearUserDataCache();
+    clearJsonCache();
+    categories = {};
+    userData = {};
+    // Clear last‐selected categories/settings
+    localStorage.removeItem('quizSettings');
+
+    // clear last-folder cache too
+    localStorage.removeItem('lastFolder');
+    localStorage.removeItem('lastFolderFiles');
+
+    // Make sure we re-load branch on next init
+    localStorage.removeItem('default_branch');
+
     init();
   };
   document.getElementById('start-test').onclick = startTest;
   document.getElementById('start-exam').onclick = startExam;
   loadRootFolders();
+  
+  // restore last folder if we have one
+  const last = localStorage.getItem('lastFolder');
+  if (last) {
+    path = last;
+    await loadFolders();
+    document.querySelectorAll('#folder-list li').forEach(li => {
+      li.classList.toggle('selected', li.textContent === last);
+    });
+  }
+
   window.addEventListener('beforeunload', function() {
     if(dirtyPush) {
-      let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
+      //let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
+      //let fname = `user_settings/${config.user}/${(path||'').replace(/\//g,'_')}_user.json`;
+      let fname = getSettingsFilename();
       ghPut(fname, userData);
     }
   });
+
+  // finally, restore last mode even if nothing else triggers init again
+  tryRestoreSession();
 };
 </script>
 </body>
