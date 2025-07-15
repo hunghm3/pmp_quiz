@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PMI Quiz Suite (Web)</title>
-  <style>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PMI Quiz Suite (Web)</title>
+    <style>
     body { 
       font-family: Arial, sans-serif; margin: 0 auto; padding: 0; 
       max-width: 800px;
@@ -104,137 +104,146 @@ body, #main-content {
 */
 
   </style>
-</head>
-<body>
-  <nav id="mode-tabs">
-    <button id="tab-config" class="active">Config</button>
-    <button id="tab-test">Test</button>
-    <button id="tab-exam">Exam</button>
-    <button id="tab-review">Review</button>
-    <button id="tab-analyze">Analyze</button>
-  </nav>
+  </head>
+  <body>
+    <nav id="mode-tabs">
+      <button id="tab-config" class="active">Config</button>
+      <button id="tab-test">Test</button>
+      <button id="tab-exam">Exam</button>
+      <button id="tab-review">Review</button>
+      <button id="tab-analyze">Analyze</button>
+    </nav>
 
-  <!-- CONFIG TAB -->
-  <section id="config" class="active">
-    <h2>Configuration</h2>
-    <div id="token-section">
-    <label>Username: <input type="text" id="gh-username" placeholder="Enter your GitHub username" style="width:200px;"></label><br>
-    &nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;<span id="user-status" class="status"></span><br>
-      <label>Token:  &nbsp;&nbsp;&nbsp;&nbsp; &nbsp;  <input type="password" id="gh-token" placeholder="Enter your GitHub PAT" style="width:200px;"></label>
+    <!-- CONFIG TAB -->
+    <section id="config" class="active">
+      <h2>Configuration</h2>
+      <div id="token-section">
+        <label>Username: <input type="text" id="gh-username"
+            placeholder="Enter your GitHub username"
+            style="width:200px;"></label><br>
+        &nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;<span id="user-status"
+          class="status"></span><br>
+        <label>Token: &nbsp;&nbsp;&nbsp;&nbsp; &nbsp; <input type="password"
+            id="gh-token" placeholder="Enter your GitHub PAT"
+            style="width:200px;"></label>
+        <br>
+        <button class="btn" id="save-token">Save Token</button>
+        &nbsp;&nbsp;<span id="token-status" class="status"></span>
+      </div>
+      <button class="btn" id="fetch-json">Fetch</button>
+      <span id="config-status" class="status"></span>
+      <div id="folder-browser"><ul id="folder-list"></ul></div>
+
       <br>
-      <button class="btn" id="save-token">Save Token</button>
-      &nbsp;&nbsp;<span id="token-status" class="status"></span>
-    </div>
-    <button class="btn" id="fetch-json">Fetch</button>
-    <span id="config-status" class="status"></span>
-    <div id="folder-browser"><ul id="folder-list"></ul></div>
-
-    <br>
-    <button class="btn" id="sync-categories">Sync Categories</button>
-    <br>
-    <div id="file-section" class="hidden">
-      <h3>Categories</h3>
-      <div id="config-cats"></div>
-      <br><br>
-      <label><input type="checkbox" id="randomize" checked> Randomize</label>
-      <label><input type="checkbox" id="only-incorrect"> Incorrect only</label>
-  <!--    <label>Time per Q: <input type="number" id="qtime" min="10" max="180" step="5" value="90"> s</label> -->
+      <button class="btn" id="sync-categories">Sync Categories</button>
       <br>
-    <label>
-      Time per Q:
-      <input type="range" id="qtime" min="10" max="180" step="5" value="90">
-      <span id="qtime-display">90</span> s
-    </label>
-    <br>
-      <button class="btn" id="start-test">Test!</button>
-      <button class="btn" id="start-exam">Exam</button>
-    </div>
-    <div id="reset-section">
-      <button class="btn" id="reset-all">Reset All Progress</button> <br>
-      <select id="reset-cat"></select>
-      <button class="btn" id="reset-cat-btn">Reset Category</button>
-    </div>
-  </section>
+      <div id="file-section" class="hidden">
+        <h3>Categories</h3>
+        <div id="config-cats"></div>
+        <br><br>
+        <label><input type="checkbox" id="randomize" checked> Randomize</label>
+        <label><input type="checkbox" id="only-incorrect"> Incorrect
+          only</label>
+        <!--    <label>Time per Q: <input type="number" id="qtime" min="10" max="180" step="5" value="90"> s</label> -->
+        <br>
+        <label>
+          Time per Q:
+          <input type="range" id="qtime" min="10" max="180" step="5" value="90">
+          <span id="qtime-display">90</span> s
+        </label>
+        <br>
+        <button class="btn" id="start-test">Test!</button>
+        <button class="btn" id="start-exam">Exam</button>
+      </div>
+      <div id="reset-section">
+        <button class="btn" id="reset-all">Reset All Progress</button> <br>
+        <select id="reset-cat"></select>
+        <button class="btn" id="reset-cat-btn">Reset Category</button>
+      </div>
+    </section>
 
-  <!-- TEST TAB -->
-  <section id="test">
-    <h2>Test Mode</h2>
-    <div>
-      <span id="test-cat" style="font-weight:bold;"></span>
-      <span id="test-progress" style="margin-left:20px;"></span>
-      <span id="test-timer" style="margin-left:20px;"></span>
-    </div>
-    <hr style="margin:5px 0 5px 0;">
-    <div id="test-question" style="margin: 10px 0; font-size: 1.1em;"></div>
-    <form id="test-choices"></form>
-    
-    <br>
-    <button class="btn" id="test-confirm" disabled>Confirm</button>
-    <button class="star-btn" id="test-star" title="Toggle Star">☆</button>
-    <span id="test-status"></span>
-    <div id="test-explanation"></div>
-  </section>
+    <!-- TEST TAB -->
+    <section id="test">
+      <h2>Test Mode</h2>
+      <div>
+        <span id="test-cat" style="font-weight:bold;"></span>
+        <span id="test-progress" style="margin-left:20px;"></span>
+        <span id="test-timer" style="margin-left:20px;"></span>
+      </div>
+      <hr style="margin:5px 0 5px 0;">
+      <div id="test-question" style="margin: 10px 0; font-size: 1.1em;"></div>
+      <form id="test-choices"></form>
 
-  <!-- EXAM TAB -->
-  <section id="exam">
-    <h2>Exam Mode  <button class="btn" id="exam-submit">Submit Exam</button></h2>
-    <div>
-      <span id="exam-cat" style="font-weight:bold;"></span>
-      <span id="exam-progress" style="margin-left:20px;"></span>
-      <span id="exam-timer" style="margin-left:20px;"></span>
-      <span id="exam-status"></span>
-    </div>
-    <hr style="margin:10px 0 16px 0;">
-    <div id="exam-nav"></div>
-    <hr style="margin:10px 0 16px 0;">
-    <div id="exam-question" style="margin: 10px 0; font-size: 1.1em;"></div>
-    <form id="exam-choices"></form>
-    <br>
-    <button class="btn" id="exam-next">Next</button>
-    <button class="star-btn" id="exam-star" title="Toggle Star">☆</button>
-    
-  </section>
-
-  <!-- REVIEW TAB -->
-  <section id="review">
-    <h2>Review Mode</h2>
-    <div>
-      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <label>Filter:
-        <select id="review-filter">
-          <option value="all">All quiz</option>
-          <option value="answered">Answered (Any)</option>
-          <option value="correct">Answered (Correct)</option>
-          <option value="incorrect">Answered (Incorrect)</option>
-          <option value="star">Star</option>
-          <option value="star_incorrect">Star (Incorrect)</option>
-        </select>
-      </label>
       <br>
-      <label>Category:
-        <select id="review-category"></select>
-      </label>
+      <button class="btn" id="test-confirm" disabled>Confirm</button>
+      <button class="star-btn" id="test-star" title="Toggle Star">☆</button>
+      <span id="test-status"></span>
+      <div id="test-explanation"></div>
+    </section>
+
+    <!-- EXAM TAB -->
+    <section id="exam">
+      <h2>Exam Mode <button class="btn" id="exam-submit">Submit
+          Exam</button></h2>
+      <div>
+        <span id="exam-cat" style="font-weight:bold;"></span>
+        <span id="exam-progress" style="margin-left:20px;"></span>
+        <span id="exam-timer" style="margin-left:20px;"></span>
+        <span id="exam-status"></span>
+      </div>
+      <hr style="margin:10px 0 16px 0;">
+      <div id="exam-nav"></div>
+      <hr style="margin:10px 0 16px 0;">
+      <div id="exam-question" style="margin: 10px 0; font-size: 1.1em;"></div>
+      <form id="exam-choices"></form>
       <br>
-      <button class="btn" id="review-prev">Previous</button>
-      <button class="btn" id="review-next">Next</button>
-      <span id="review-prog"></span>
-    </div>
-    <div id="review-meta"></div>
-    <hr style="margin:10px 0 16px 0;">
-    <div id="review-question" style="margin: 10px 0; font-size: 1.1em;"></div>
-    <div id="review-choices"></div>
-    <button class="star-btn" id="review-star" title="Toggle Star">☆</button>
-    <div id="review-explanation"></div>
-  </section>
+      <button class="btn" id="exam-next">Next</button>
+      <button class="star-btn" id="exam-star" title="Toggle Star">☆</button>
 
-  <!-- ANALYZE TAB -->
-  <section id="analyze">
-    <h2>Analyze Mode</h2>
-    <div id="stats"></div>
-    <canvas id="chart" width="600" height="400"></canvas>
-  </section>
+    </section>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
+    <!-- REVIEW TAB -->
+    <section id="review">
+      <h2>Review Mode</h2>
+      <div>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <label>Filter:
+          <select id="review-filter">
+            <option value="all">All quiz</option>
+            <option value="answered">Answered (Any)</option>
+            <option value="correct">Answered (Correct)</option>
+            <option value="incorrect">Answered (Incorrect)</option>
+            <option value="star">Star</option>
+            <option value="star_incorrect">Star (Incorrect)</option>
+          </select>
+        </label>
+        <br>
+        <label>Category:
+          <select id="review-category"></select>
+        </label>
+        <br>
+        <button class="btn" id="review-prev">Previous</button>
+        <button class="btn" id="review-next">Next</button>
+        <span id="review-prog"></span>
+      </div>
+      <div id="review-meta"></div>
+      <hr style="margin:10px 0 16px 0;">
+      <div id="review-question" style="margin: 10px 0; font-size: 1.1em;"></div>
+      <div id="review-choices"></div>
+      <button class="star-btn" id="review-star" title="Toggle Star">☆</button>
+      <div id="review-explanation"></div>
+    </section>
+
+    <!-- ANALYZE TAB -->
+    <section id="analyze">
+      <h2>Analyze Mode</h2>
+      <div id="stats"></div>
+      <canvas id="chart" width="600" height="400"></canvas>
+    </section>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
 // ====== Caching categories and userData ======
 let cachedCategories = null;
 let cachedUserData = null;
@@ -1523,5 +1532,5 @@ window.onload = async function() {
   tryRestoreSession();
 };
 </script>
-</body>
+  </body>
 </html>
