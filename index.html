@@ -772,7 +772,12 @@ function scrollIfOverflow(el, controlId) {
 
 async function startTest(){
   // 1) always refresh userData from GitHub in case local is stale/missing
-  await syncUserDataOnLoad();
+  // If a token is already stored, immediately initialize (load settings + restore session)
+  if (config.token) {
+    // make sure we merge remote answers before anything else
+    await syncUserDataOnLoad();    
+  }
+  
   clearSession();
   saveQuizSettings();
   // (optional) re-persist merged userData locally
@@ -846,7 +851,7 @@ function showTestQuestion(){
   timerJob = setInterval(()=>{
     let elapsed = Math.round((performance.now()-startTime)/1000);
     document.getElementById('test-timer').textContent = `Time: ${formatDuration(elapsed)}`;
-  }, 500);
+  }, 1000);
   saveTestSession();
 
   // ensure the question is fully in view
@@ -955,7 +960,11 @@ document.getElementById('test-confirm').onclick = function(){
 };
 
 // ========== EXAM TAB ==========
-function startExam(){
+async function startExam(){
+  if (config.token) {
+    // make sure we merge remote answers before anything else
+    await syncUserDataOnLoad();    
+  }
   clearSession();
   saveQuizSettings();
   let sel = getSelectedCats();
