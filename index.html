@@ -613,9 +613,14 @@ function scrollIfOverflow(el) {
   }
 }
 
-function startTest(){
+async function startTest(){
+  // 1) always refresh userData from GitHub in case local is stale/missing
+  await syncUserDataOnLoad();
   clearSession();
   saveQuizSettings();
+  // (optional) re-persist merged userData locally
+  localStorage.setItem('userData', JSON.stringify(userData));
+
   let sel = getSelectedCats();
   if (!sel.length) { alert("Please select at least one category."); return; }
   userData = JSON.parse(localStorage.getItem('userData')||'{}');
@@ -1235,6 +1240,8 @@ window.onload = async function() {
 
   // If a token is already stored, immediately initialize (load settings + restore session)
   if (config.token) {
+    // make sure we merge remote answers before anything else
+    await syncUserDataOnLoad();
      await init();
   }
 
