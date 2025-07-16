@@ -826,9 +826,9 @@ function saveUserData(){
 
 function getSettingsFilename() {
   // only add “abc_” if path is non-empty
-  const prefix = path ? `${path.replace(/\//g,'_')}_` : '';
+  const prefix = path ? `${path.replace(/\//g,'_')}` : '';
   if (!path || !prefix) return null
-  return `user_settings/${config.user}/${prefix}user.json`;
+  return `user_settings/${config.user}/${prefix}.json`;
 }
 
 // —— scroll element into view if it overflows the viewport ——  
