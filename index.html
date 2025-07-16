@@ -348,7 +348,7 @@ async function ghFetch(p){
 }
 async function ghPut(p,obj){
   if(!config.token) throw "GitHub token not set!";
-  obj.setting_time = Date.now();
+  //obj.setting_time = Date.now();
   let sha=null, remote=null, merged=false;
   try { 
     remote = await ghFetch(p); sha = remote.sha; 
@@ -452,6 +452,42 @@ async function ghPut(p,obj){
      
   } */
   if (merged) alert("A newer version was found in GitHub, your local changes were not pushed.");
+}
+
+// Sync local user data with GitHub: fetch, merge, and upload
+async function syncUserData(path) {
+  // 1. Fetch latest user data from GitHub
+  let remoteObj = {};
+  try {
+    let remote = await ghFetch(path);
+    if (remote && remote.content) {
+      remoteObj = JSON.parse(base64decode(remote.content));
+    }
+  } catch {}
+
+  // 2. Get local user data
+  let localObj = {};
+  try {
+    localObj = JSON.parse(localStorage.getItem('userData') || '{}');
+  } catch {}
+
+  // 3. Merge local data into fetched data
+  for (let cat in localObj) {
+    if (!remoteObj[cat]) remoteObj[cat] = {};
+    for (let ctx in localObj[cat]) {
+      if (!remoteObj[cat][ctx]) {
+        remoteObj[cat][ctx] = localObj[cat][ctx]; // add new answer
+      } else {
+        remoteObj[cat][ctx] = { ...remoteObj[cat][ctx], ...localObj[cat][ctx] };
+      }
+    }
+  }
+
+
+  //remoteObj.setting_time = Date.now();
+
+  // 4. Upload merged data to GitHub
+  await ghPut(path, remoteObj);
 }
 
 function renderConfigCategories() {
@@ -638,36 +674,50 @@ qtimeSlider.oninput = () => {
 async function syncUserDataOnLoad(){
   // Check if categories are loaded and not empty
   if (!categories || Object.keys(categories).length === 0) {
-    // No categories, do NOT fetch user.json
-    userData = {}; // Optionally reset userData
+    userData = {};
     return;
   }
-  
-  //let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
+
   let fname = getSettingsFilename();
   let remote = null, remoteObj = {};
-  if(fname)
+  if (fname) {
     try { remote = await ghFetch(fname); } catch {}
-  if (remote && remote.content) {
-    try { remoteObj = JSON.parse(base64decode(remote.content)); } catch {}
+    if (remote && remote.content) {
+      try { remoteObj = JSON.parse(base64decode(remote.content)); } catch {}
+    }
   }
   let localObj = {};
-  try { localObj = JSON.parse(localStorage.getItem('userData')||'{}'); } catch {}
-  let localTime = localObj.setting_time||0, remoteTime = remoteObj.setting_time||0;
+  try { localObj = JSON.parse(localStorage.getItem('userData') || '{}'); } catch {}
+  let localTime = localObj.setting_time || 0, remoteTime = remoteObj.setting_time || 0;
+
   if (!localTime && !remoteTime) {
-    userData = {}; settingTime = Date.now();
-  } else if (localTime >= remoteTime) {
-    userData = localObj; settingTime = localTime;
+    userData = {};
+  } else if (remoteTime > localTime) {
+    // Server is newer, use server data and delete all local
+    userData = remoteObj;
+    localStorage.setItem('userData', JSON.stringify(userData));
   } else {
-    userData = remoteObj; settingTime = remoteTime;
+    // Local is newer, merge local into server data
+    let merged = { ...remoteObj };
+    for (let cat in localObj) {
+      if (!merged[cat]) merged[cat] = {};
+      for (let ctx in localObj[cat]) {
+        if (!merged[cat][ctx]) {
+          merged[cat][ctx] = localObj[cat][ctx];
+        } else {
+          merged[cat][ctx] = { ...merged[cat][ctx], ...localObj[cat][ctx] };
+        }
+      }
+    }
+    userData = merged;
     localStorage.setItem('userData', JSON.stringify(userData));
   }
 
   if (!userData || Object.keys(userData).length === 0) {
-  try { userData = JSON.parse(localStorage.getItem('userData') || '{}'); }
-  catch { userData = {}; }
+    try { userData = JSON.parse(localStorage.getItem('userData') || '{}'); }
+    catch { userData = {}; }
+  }
   cachedUserData = userData;
-}
 }
 
 // ========== SESSION MANAGEMENT ==========
@@ -743,7 +793,7 @@ function getSelectedCats(){
   return Array.from(document.querySelectorAll('.cat-cb')).filter(cb=>cb.checked).map(cb=>cb.value);
 }
 function saveUserData(){
-  userData.setting_time = Date.now();
+  //userData.setting_time = Date.now();
   localStorage.setItem('userData', JSON.stringify(userData));
   cachedUserData = userData;
   dirtyPush = true;
@@ -1293,8 +1343,11 @@ document.getElementById('reset-all').onclick = function(){
     userData = {}; saveUserData();
     // --- Push to GitHub after reset ---
     let fname = getSettingsFilename();
-    if(fname)
+    if(fname){
+      userData.setting_time = Date.now();
       ghPut(fname, userData);
+    }
+      
     alert("Progress reset.");
   }
 };
@@ -1306,8 +1359,11 @@ document.getElementById('reset-cat-btn').onclick = function(){
 
     // --- Push to GitHub after reset ---
     let fname = getSettingsFilename();
-    if(fname)
+    if(fname){
+      userData.setting_time = Date.now();
       ghPut(fname, userData);
+    }
+      
     alert("Category progress reset.");
   }
 };
@@ -1324,7 +1380,8 @@ function switchTab(i){
     //let fname = `user_settings/${(path||'').replace(/\//g,'_')}_user.json`;
     let fname = getSettingsFilename();
     if (fname)
-      ghPut(fname, userData);
+      syncUserData(fname);
+      //ghPut(fname, userData);
     dirtyPush=false;
   }
   if(i==='analyze') analyze();
@@ -1480,6 +1537,7 @@ window.onload = async function() {
   // Force reload categories from GitHub
   try {
     await loadFolders();
+    syncUserData();
     document.getElementById('config-status').textContent = "Categories synced!";
   } catch (e) {
     document.getElementById('config-status').textContent = "Failed to sync categories.";
@@ -1533,7 +1591,8 @@ window.onload = async function() {
       //let fname = `user_settings/${config.user}/${(path||'').replace(/\//g,'_')}_user.json`;
       let fname = getSettingsFilename();
       if(fname)
-        ghPut(fname, userData);
+        syncUserData(fname);
+        //ghPut(fname, userData);
     }
   });
 
