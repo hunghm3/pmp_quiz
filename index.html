@@ -28,7 +28,7 @@
     .btn { padding: 8px 16px; margin: 10px 5px; }
     #folder-browser { border: 1px solid #ccc; overflow-y: auto; height: 200px; }
     ul { list-style: none; padding: 0; margin: 0; }
-    li { margin: 4px 0; cursor: pointer; }
+li { margin: 4px 0 4px 5px; cursor: pointer; }
     .folder { font-weight: bold; }
     .hidden { display: none; }
     .choice-correct { color: #007700; font-weight: bold; }
@@ -120,14 +120,14 @@ body, #main-content {
       <div id="token-section">
         <label>Username: <input type="text" id="gh-username"
             placeholder="Enter your GitHub username"
-            style="width:200px;"></label><br>
+            style="width:200px;" autocomplete="off"></label><br>
         &nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;<span id="user-status"
           class="status"></span><br>
         <label>Token: &nbsp;&nbsp;&nbsp;&nbsp; &nbsp; <input type="password"
             id="gh-token" placeholder="Enter your GitHub PAT"
-            style="width:200px;"></label>
+            style="width:200px;" autocomplete="off"></label>
         <br>
         <button class="btn" id="save-token">Save Token</button>
         &nbsp;&nbsp;<span id="token-status" class="status"></span>
@@ -225,13 +225,14 @@ body, #main-content {
         <br>
         <button class="btn" id="review-prev">Previous</button>
         <button class="btn" id="review-next">Next</button>
+        <button class="star-btn" id="review-star" title="Toggle Star">☆</button>
         <span id="review-prog"></span>
       </div>
       <div id="review-meta"></div>
       <hr style="margin:10px 0 16px 0;">
       <div id="review-question" style="margin: 10px 0; font-size: 1.1em;"></div>
       <div id="review-choices"></div>
-      <button class="star-btn" id="review-star" title="Toggle Star">☆</button>
+      
       <div id="review-explanation"></div>
     </section>
 
@@ -239,7 +240,8 @@ body, #main-content {
     <section id="analyze">
       <h2>Analyze Mode</h2>
       <div id="stats"></div>
-      <canvas id="chart" width="600" height="400"></canvas>
+      <br><br>
+      <canvas id="chart" width="600" height="300"></canvas>
     </section>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -672,39 +674,57 @@ qtimeSlider.oninput = () => {
 
 // ========== GITHUB SYNC & CONFLICTS ==========
 async function syncUserDataOnLoad(){
-  // Check if categories are loaded and not empty
+  // 1. Check if categories are loaded and not empty
   if (!categories || Object.keys(categories).length === 0) {
+    // No categories, reset userData and exit
     userData = {};
     return;
   }
 
+  // 2. Get the settings filename for user data
   let fname = getSettingsFilename();
   let remote = null, remoteObj = {};
+
+  // 3. Fetch latest user data from server (GitHub)
   if (fname) {
-    try { remote = await ghFetch(fname); } catch {}
+    try {
+      remote = await ghFetch(fname);
+    } catch {}
     if (remote && remote.content) {
-      try { remoteObj = JSON.parse(base64decode(remote.content)); } catch {}
+      try {
+        remoteObj = JSON.parse(base64decode(remote.content));
+      } catch {}
     }
   }
+
+  // 4. Load local user data from localStorage
   let localObj = {};
-  try { localObj = JSON.parse(localStorage.getItem('userData') || '{}'); } catch {}
-  let localTime = localObj.setting_time || 0, remoteTime = remoteObj.setting_time || 0;
+  try {
+    localObj = JSON.parse(localStorage.getItem('userData') || '{}');
+  } catch {}
+
+  // 5. Compare timestamps to decide merge or replace
+  let localTime = localObj.setting_time || 0;
+  let remoteTime = remoteObj.setting_time || 0;
 
   if (!localTime && !remoteTime) {
+    // No data on either side, start fresh
     userData = {};
   } else if (remoteTime > localTime) {
-    // Server is newer, use server data and delete all local
+    // Server data is newer: replace local data completely
     userData = remoteObj;
     localStorage.setItem('userData', JSON.stringify(userData));
   } else {
-    // Local is newer, merge local into server data
+    // Local data is newer: merge local data into server data
     let merged = { ...remoteObj };
     for (let cat in localObj) {
       if (!merged[cat]) merged[cat] = {};
       for (let ctx in localObj[cat]) {
         if (!merged[cat][ctx]) {
+          // Add new answer from local
           merged[cat][ctx] = localObj[cat][ctx];
         } else {
+          // Update properties, do not duplicate
           merged[cat][ctx] = { ...merged[cat][ctx], ...localObj[cat][ctx] };
         }
       }
@@ -713,10 +733,15 @@ async function syncUserDataOnLoad(){
     localStorage.setItem('userData', JSON.stringify(userData));
   }
 
+  // 6. Ensure userData is always defined
   if (!userData || Object.keys(userData).length === 0) {
-    try { userData = JSON.parse(localStorage.getItem('userData') || '{}'); }
-    catch { userData = {}; }
+    try {
+      userData = JSON.parse(localStorage.getItem('userData') || '{}');
+    } catch {
+      userData = {};
+    }
   }
+  // 7. Cache userData for quick access
   cachedUserData = userData;
 }
 
@@ -1314,7 +1339,7 @@ function analyze(){
   sd.innerHTML += `<div><strong>Incorrect:</strong> ${total_a-total_c}</div>`;
   sd.innerHTML += `<div><strong>Starred:</strong> ${total_star}</div>`;
   sd.innerHTML += `<div><strong>Unanswered:</strong> ${total_q-total_a}</div>`;
-  sd.innerHTML += `<div><strong>Avg time per question:</strong> ${total_a ? (total_time/total_a).toFixed(1)+'s' : '-'}</div>`;
+  sd.innerHTML += `<div><strong>Avg time per question:</strong> ${total_a ? (total_time/total_a).toFixed(1)+'s' : '-'}</div> <br><br>`;
   Object.keys(s).forEach(cat=>{
     let d = s[cat];
     sd.innerHTML += `<div><u>${cat}</u>: attempted ${d.a}/${d.t}, correct ${d.c}, starred ${d.star}, avg time ${d.a ? (d.time/d.a).toFixed(1)+'s' : '-'}</div>`;
@@ -1396,7 +1421,8 @@ document.getElementById('tab-analyze').onclick=()=>switchTab('analyze');
 async function loadRootFolders(){
   path = '';
   let it=await ghFetch('');
-  renderList('folder-list',it.filter(i=>i.type==='dir'),n=>{
+  // Filter out 'user_settings' folder
+  renderList('folder-list',it.filter(i=>i.type==='dir' && i.name!=='user_settings'),n=>{
     path=n;
     localStorage.setItem('lastFolder', n);
     loadFolders();
@@ -1537,7 +1563,7 @@ window.onload = async function() {
   // Force reload categories from GitHub
   try {
     await loadFolders();
-    syncUserData();
+    await syncUserDataOnLoad();
     document.getElementById('config-status').textContent = "Categories synced!";
   } catch (e) {
     document.getElementById('config-status').textContent = "Failed to sync categories.";
