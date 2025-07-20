@@ -1130,7 +1130,13 @@ document.getElementById('exam-next').onclick = function(){
     examAnswers[q.question_context] = multi ? sel : sel[0];
   }
   examMarked[q.question_context] = examMarked[q.question_context]||false;
-  examAnswersTime[q.question_context] = Math.round((performance.now()-examQuestionStartTime)/1000);
+  if(examAnswersTime[q.question_context] != undefined && examAnswersTime[q.question_context] > 0){
+    // If the answer was already recorded, plus the time
+    examAnswersTime[q.question_context] = examAnswersTime[q.question_context] + Math.round((performance.now()-examQuestionStartTime)/1000);;
+  } else {
+    // Otherwise, record the time taken for this question
+    examAnswersTime[q.question_context] = Math.round((performance.now()-examQuestionStartTime)/1000);
+  }
 
   examIdx = (examIdx+1)%examQuestions.length;
   showExamQuestion();
