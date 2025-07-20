@@ -274,7 +274,7 @@ const config = {user:'', token: '', owner: 'hunghm3', repo: 'pmi_quiz' };
 const api = 'https://api.github.com';
 let branch='main', path='';
 let categories={}, categoryFiles=[], quizSettings={}, userData={}, pool=[], idx=0, startTime=0, timerJob=null, dirtyPush=false;
-let examQuestions=[], examIdx=0, examAnswers={}, examMarked={}, examStartTime=0, examMaxTime=0, examCountdownInt=null, examWarned=false;
+let examQuestions=[], examIdx=0, examAnswers={}, examAnswersTime={}, examMarked={}, examStartTime=0, examMaxTime=0, examCountdownInt=null, examWarned=false;
 let reviewList=[], reviewIdx=0, chartInstance=null;
 let settingTime = 0;
 
@@ -767,6 +767,7 @@ function tryRestoreSession() {
     examIdx = lastSession.data.examIdx;
     examQuestions = lastSession.data.examQuestions;
     examAnswers = lastSession.data.examAnswers;
+    examAnswersTime = lastSession.data.examAnswersTime || {};
     examMarked = lastSession.data.examMarked;
     examStartTime = lastSession.data.examStartTime;
     examMaxTime = lastSession.data.examMaxTime;
@@ -786,7 +787,7 @@ function tryRestoreSession() {
 
 // Save session on every step for test/exam/review
 function saveTestSession() { saveSession('test', {idx, pool}); }
-function saveExamSession() { saveSession('exam', {examIdx, examQuestions, examAnswers, examMarked, examStartTime, examMaxTime}); }
+function saveExamSession() { saveSession('exam', {examIdx, examQuestions, examAnswers, examAnswersTime, examMarked, examStartTime, examMaxTime}); }
 function saveReviewSession() { saveSession('review', {reviewIdx, reviewList}); }
 
 
@@ -1053,7 +1054,7 @@ async function startExam(){
     }
   }
   if (quizSettings.randomize) examQuestions.sort(()=>Math.random()-0.5);
-  examIdx = 0; examAnswers = {}; examMarked = {}; examWarned = false;
+  examIdx = 0; examAnswers = {}; examAnswersTime = {}; examMarked = {}; examWarned = false;
   examMaxTime = Number(document.getElementById('qtime').value) * examQuestions.length;
   examStartTime = performance.now();
   startExamCountdown();
@@ -1061,6 +1062,7 @@ async function startExam(){
   switchTab('exam');
 }
 function showExamQuestion(){
+  examQuestionStartTime = performance.now(); // Reset start time for the question
   let q = examQuestions[examIdx];
   document.getElementById('exam-cat').textContent = q._cat;
   document.getElementById('exam-progress').textContent = `${examIdx+1}/${examQuestions.length}`;
@@ -1128,6 +1130,8 @@ document.getElementById('exam-next').onclick = function(){
     examAnswers[q.question_context] = multi ? sel : sel[0];
   }
   examMarked[q.question_context] = examMarked[q.question_context]||false;
+  examAnswersTime[q.question_context] = Math.round((performance.now()-examQuestionStartTime)/1000);
+
   examIdx = (examIdx+1)%examQuestions.length;
   showExamQuestion();
 };
@@ -1148,7 +1152,7 @@ function submitExam(){
     userData[cat][ctx] = {
       is_correct: is_correct,
       answer_option: chosen,
-      answer_time: elapsed,
+      answer_time: examAnswersTime[ctx] || 0,//elapsed,
       answer_date: nowIso(),
       is_confidence: examMarked[ctx]||false
     };
