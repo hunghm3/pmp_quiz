@@ -134,10 +134,13 @@ body, #main-content {
       </div>
       <button class="btn" id="fetch-json">Fetch</button>
       <span id="config-status" class="status"></span>
+
       <div id="folder-browser"><ul id="folder-list"></ul></div>
 
       <br>
       <button class="btn" id="sync-categories">Sync Categories</button>
+      <button class="btn" id="reset-cache">Reset Cache</button>
+      <span id="reset-cache-status" class="status"></span>
       <br>
       <div id="file-section" class="hidden">
         <h3>Categories</h3>
@@ -342,10 +345,16 @@ async function ghFetch(p){
   }
   if(!r.ok) throw 'Fetch failed with status ' + r.status;
 
+  document.getElementById('config-status').textContent =
+      `Fetched, now converting to JSON..`;
   const json = await r.json();
+
+  //document.getElementById('config-status').textContent =
+  //    `Converted JSON, now saving to cache`;
   // 2) store in cache
-  saveJsonCache(p, json);
-  //return r.json();
+  //saveJsonCache(p, json);
+  //document.getElementById('config-status').textContent =
+  //    `Saved JSON for ${p}`;
   return json;
 }
 async function ghPut(p,obj){
@@ -542,13 +551,17 @@ async function loadFolders(){
   document.getElementById('config-cats').innerHTML = '';
   let it=await ghFetch(path||'');
   if (!it) {
-  // Handle missing folder/file gracefully
-  document.getElementById('config-status').textContent =
-      `Failed to load data, skip.`;
-  return;
-}
+    // Handle missing folder/file gracefully
+    document.getElementById('config-status').textContent =
+        `Failed to load data, skip.`;
+    return;
+  }
+
+
   let files=it.filter(i=>i.type==='file'&&i.name.endsWith('.json'));
-  categoryFiles = files.map(f=>f.name);
+  categoryFiles = files.map(f=>f.name); 
+  //savecategoriesCache(categoryFiles);
+
   localStorage.setItem('lastFolderFiles', JSON.stringify(categoryFiles));
   let catList = [];
   for (let file of files) {
@@ -559,6 +572,7 @@ async function loadFolders(){
     categories[cat] = Array.isArray(data) ? data : Object.values(data);
     catList.push(cat);
   }
+
   let html = `<label><input type="checkbox" id="cat-all"> All</label>`;
   catList.forEach(cat=>{
     //html += `<label><input type="checkbox" class="cat-cb" value="${cat}" checked> ${cat} (${categories[cat].length})</label>`;
@@ -596,7 +610,8 @@ async function loadFolders(){
   renderConfigCategories();
 
    // Save to cache after fetching all categories
-  saveCategoriesCache(categories);
+   //Due to big file size, we don't cache categories, only cache when click Test/Exam
+  //saveCategoriesCache(categories);
 
   document.getElementById('config-status').textContent =
       `Loaded Folders.`;
@@ -618,13 +633,14 @@ async function init(){
       // store it for next time
       localStorage.setItem('default_branch', branch);
 
-      //document.getElementById('config-status').textContent = "Ready — browse folders below.";
+     
     } catch {
       document.getElementById('config-status').textContent = "Failed to load repo info. Check your token/repo.";
       return;
     }
   }
   await loadFolders();
+
   let saved = JSON.parse(localStorage.getItem('quizSettings')||'{}');
   document.getElementById('randomize').checked = saved.randomize ?? true;
   document.getElementById('only-incorrect').checked = saved.onlyIncorrect ?? false;
@@ -689,7 +705,11 @@ async function syncUserDataOnLoad(){
   if (fname) {
     try {
       remote = await ghFetch(fname);
-    } catch {}
+    } catch {
+      document.getElementById('config-status').textContent = "[ERROR] Failed to fetch user data from GitHub. ${fname}";
+      return;
+    }
+
     if (remote && remote.content) {
       try {
         remoteObj = JSON.parse(base64decode(remote.content));
@@ -1435,6 +1455,7 @@ async function loadRootFolders(){
   renderList('folder-list',it.filter(i=>i.type==='dir' && i.name!=='user_settings'),n=>{
     path=n;
     localStorage.setItem('lastFolder', n);
+    clearCategoriesCache() ; // Clear cache when changing folder
     loadFolders();
   });
 
@@ -1605,8 +1626,30 @@ window.onload = async function() {
     document.getElementById('config-status').textContent =
       `Fetching data..`;
 
-    init();
+    await init();
   };
+
+  document.getElementById('reset-cache').onclick = function() {
+      // Save user name and token
+      const userName = localStorage.getItem('gh_user');
+      const ghToken = localStorage.getItem('gh_token');
+
+      // Optionally, if you store them under different keys, adjust accordingly.
+
+      // Clear all local storage
+      localStorage.clear();
+
+      // Restore user name and token
+      if (userName) localStorage.setItem('gh_user', userName);
+      if (ghToken) localStorage.setItem('gh_token', ghToken);
+
+      // Provide feedback to user
+      document.getElementById('reset-cache-status').textContent = "Cache reset! User name and token preserved.";
+      
+      // Optionally, you can refresh the page or re-initialize the app here
+      // location.reload();
+  };
+
   document.getElementById('start-test').onclick = startTest;
   document.getElementById('start-exam').onclick = startExam;
   await loadRootFolders();
