@@ -112,6 +112,7 @@ body, #main-content {
       <button id="tab-exam">Exam</button>
       <button id="tab-review">Review</button>
       <button id="tab-analyze">Analyze</button>
+      <button id="tab-about">About</button> 
     </nav>
 
     <!-- CONFIG TAB -->
@@ -246,6 +247,15 @@ body, #main-content {
       <br><br>
       <canvas id="chart" width="600" height="300"></canvas>
     </section>
+
+    <!-- Add About Content Section (anywhere in your main content area) -->
+    <section id="about">
+      <h2>About</h2>
+      <p><strong>Author:</strong> HungHM</p>
+      <p><strong>Introduce:</strong> This app helps you quiz any customize questions</p>
+      <p><strong>Version:</strong> 1.0.0</p>
+    </section>
+    
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
@@ -689,7 +699,7 @@ qtimeSlider.oninput = () => {
 
 
 // ========== GITHUB SYNC & CONFLICTS ==========
-async function syncUserDataOnLoad(){
+async function syncUserDataOnLoad(pushBack = false){
   // 1. Check if categories are loaded and not empty
   if (!categories || Object.keys(categories).length === 0) {
     // No categories, reset userData and exit
@@ -751,6 +761,13 @@ async function syncUserDataOnLoad(){
     }
     userData = merged;
     localStorage.setItem('userData', JSON.stringify(userData));
+
+    if(pushBack){
+      //push back data to GitHub
+      let fname = getSettingsFilename();
+      if(fname)
+        syncUserData(fname);
+    }    
   }
 
   // 6. Ensure userData is always defined
@@ -1425,7 +1442,7 @@ document.getElementById('reset-cat-btn').onclick = function(){
 
 // ========== Tabs ==========
 function switchTab(i){
-  ['config','test','exam','review','analyze'].forEach(t=>
+  ['config','test','exam','review','analyze','about'].forEach(t=>
     document.getElementById(t).classList.toggle('active',t===i)
   );
   document.querySelectorAll('nav button').forEach(b=>
@@ -1446,6 +1463,7 @@ document.getElementById('tab-test').onclick=()=>switchTab('test');
 document.getElementById('tab-exam').onclick=()=>switchTab('exam');
 document.getElementById('tab-review').onclick=()=>{buildReview();switchTab('review');};
 document.getElementById('tab-analyze').onclick=()=>switchTab('analyze');
+document.getElementById('tab-about').onclick = () => switchTab('about');
 
 // ========== Folders/List ==========
 async function loadRootFolders(){
@@ -1455,6 +1473,7 @@ async function loadRootFolders(){
   renderList('folder-list',it.filter(i=>i.type==='dir' && i.name!=='user_settings'),n=>{
     path=n;
     localStorage.setItem('lastFolder', n);
+    syncUserDataOnLoad(true); //saving working data beore changing folder
     clearCategoriesCache() ; // Clear cache when changing folder
     loadFolders();
   });
@@ -1477,6 +1496,8 @@ function renderList(id,items,fn){
     const li = document.createElement('li');
     li.textContent = i.name;
     if (i.type === 'dir') li.classList.add('folder');
+
+    //Click on folder to load its contents
     li.onclick = function() {
       // Remove 'selected' from all siblings
       ul.querySelectorAll('.selected').forEach(e => e.classList.remove('selected'));
@@ -1567,7 +1588,7 @@ window.onload = async function() {
   // If a token is already stored, immediately initialize (load settings + restore session)
   if (config.token) {
     // make sure we merge remote answers before anything else
-    await syncUserDataOnLoad();
+     await syncUserDataOnLoad();
      await init();
   }
 
@@ -1583,6 +1604,10 @@ window.onload = async function() {
 
   
   document.getElementById('sync-categories').onclick = async function() {
+
+  document.getElementById('config-status').textContent = "Pushing existing user data to GitHub...";
+  //push back user data to GitHub to avoid any missing data
+  await syncUserDataOnLoad(true);
   // Optionally show a loading indicator
   document.getElementById('config-status').textContent = "Syncing categories from GitHub...";
   
