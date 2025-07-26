@@ -1850,11 +1850,15 @@ body, #main-content {
         }</div> <br><br>`;
         Object.keys(s).forEach((cat) => {
           let d = s[cat];
-          sd.innerHTML += `<div><u>${cat}</u>: attempted ${d.a}/${
-            d.t
-          }, correct ${d.c}, starred ${d.star}, avg time ${
-            d.a ? (d.time / d.a).toFixed(1) + "s" : "-"
-          }</div>`;
+          // sd.innerHTML += `<div><u>${cat}</u>: attempted ${d.a}/${
+          //   d.t
+          // }, correct ${d.c}, starred ${d.star}, avg time ${
+          //   d.a ? (d.time / d.a).toFixed(1) + "s" : "-"
+          // }</div>`;
+          sd.innerHTML += `<div>
+              <a href="#" class="analyze-category-link" data-category="${cat}"><u>${cat}</u></a>: 
+              attempted ${d.a}/${d.t}, correct ${d.c}, starred ${d.star}, avg time ${d.a ? (d.time / d.a).toFixed(1) + "s" : "-"}
+            </div>`;
         });
         let l = Object.keys(s),
           v = l.map((k) => Math.round((100 * s[k].c) / s[k].t));
@@ -1866,6 +1870,19 @@ body, #main-content {
             data: { labels: l, datasets: [{ label: "Accuracy %", data: v }] },
           }
         );
+
+        setTimeout(function() {
+          document.querySelectorAll('.analyze-category-link').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+              e.preventDefault();
+              let cat = this.getAttribute('data-category');
+              switchTab("review");
+              document.getElementById("review-category").value = cat;
+              buildReview();
+              document.getElementById("review-filter").value = "all";
+            });
+          });
+        }, 500);
       }
 
       // ========== RESET PROGRESS ==========
