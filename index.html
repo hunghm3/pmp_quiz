@@ -329,6 +329,7 @@ body, #main-content {
       </h2>
       <div>
         <span id="exam-cat" style="font-weight: bold"></span>
+        <br>
         <span id="exam-progress" style="margin-left: 20px"></span>
         <span id="exam-timer" style="margin-left: 20px"></span>
         <span id="exam-status"></span>
@@ -1856,8 +1857,9 @@ body, #main-content {
           //   d.a ? (d.time / d.a).toFixed(1) + "s" : "-"
           // }</div>`;
           sd.innerHTML += `<div>
-              <a href="#" class="analyze-category-link" data-category="${cat}"><u>${cat}</u></a>: 
-              attempted ${d.a}/${d.t}, correct ${d.c}, starred ${d.star}, avg time ${d.a ? (d.time / d.a).toFixed(1) + "s" : "-"}
+              <a href="#" class="analyze-category-link" data-category="${cat}"><u>${cat}</u></a>: <br>
+               &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;attempted ${d.a}/${d.t}, correct ${d.c}, starred ${d.star}, avg time ${d.a ? (d.time / d.a).toFixed(1) + "s" : "-"},
+               <strong>total time  ${formatDuration(s[cat].time)}</strong>
             </div>`;
         });
         let l = Object.keys(s),
