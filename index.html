@@ -2036,6 +2036,8 @@ body, #main-content {
           if (event.key === "Enter" || event.key === " ") {
             document.getElementById("test-confirm").click();
           }
+
+          if(event.key.toLowerCase() === "s") document.getElementById('test-star').click();
         }
         if (document.getElementById("exam").classList.contains("active")) {
           let q = examQuestions[examIdx];
@@ -2052,6 +2054,8 @@ body, #main-content {
           if (event.key === "Enter" || event.key === " ") {
             document.getElementById("exam-next").click();
           }
+
+          if(event.key.toLowerCase() === "s") document.getElementById('exam-star').click();
         }
         if (document.getElementById("review").classList.contains("active")) {
           if (event.key === "ArrowRight")
@@ -2060,6 +2064,7 @@ body, #main-content {
             document.getElementById("review-prev").click();
           if (event.key === " " || event.key === "Enter")
             document.getElementById("review-next").click();
+          if(event.key.toLowerCase() === "s") document.getElementById('review-star').click();
         }
       });
 
