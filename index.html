@@ -308,6 +308,7 @@ body, #main-content {
       <h2>Test Mode</h2>
       <div>
         <span id="test-cat" style="font-weight: bold"></span>
+        <br>
         <span id="test-progress" style="margin-left: 20px"></span>
         <span id="test-timer" style="margin-left: 20px"></span>
       </div>
@@ -1274,7 +1275,10 @@ body, #main-content {
         // document.getElementById('test-explanation').innerHTML =
         //   `<strong>Answer: ${correctArr.join(', ')}</strong><br>${ex}`;
         // convert every newline into a <br> before injecting
-        const formatted = ex.replace(/\n/g, "<br>");
+        var formatted = ex.replace(/\n/g, "<br>");
+        // Regex này sẽ tìm mọi cụm "A. Incorrect", "B. Incorrect", ..., "C. Correct", ... và bôi đậm đúng phần "Correct"/"Incorrect"
+        formatted = formatted.replace(/([A-H]\.\s*(?:Correct|Incorrect))\s*\. /g, '\n<strong>\$1</strong>  ');
+
         document.getElementById(
           "test-explanation"
         ).innerHTML = `<strong>Answer: ${correctArr.join(
@@ -1764,6 +1768,10 @@ body, #main-content {
           ch.appendChild(document.createElement("br"));
         });
         let ex = ans.explanation || "";
+        // Regex này sẽ tìm mọi cụm "A. Incorrect", "B. Incorrect", ..., "C. Correct", ... và bôi đậm đúng phần "Correct"/"Incorrect"
+        ex = ex.replace(/([A-H]\.\s*(?:Correct|Incorrect))\s*\. /g, '\n<strong>\$1</strong>  ');
+        //ex = ex.replace(/([A-H]\.\s*(Correct|Incorrect))/g, '<strong>\$1</strong>');
+
         document.getElementById(
           "review-explanation"
         ).innerHTML = `<strong>Answer: ${correctArr.join(
