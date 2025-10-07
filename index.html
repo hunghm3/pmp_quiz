@@ -256,6 +256,7 @@ body, #main-content {
         /></label>
         <br />
         <button class="btn" id="save-token">Save Token</button>
+        <button class="btn" id="clear-token">Clear Token</button>
         &nbsp;&nbsp;<span id="token-status" class="status"></span>
       </div>
       <button class="btn" id="fetch-json">Fetch</button>
@@ -490,6 +491,35 @@ body, #main-content {
             "Please enter your GitHub Personal Access Token.";
         }
       }
+      
+      /**
+         * Clear both username and token from UI and localStorage.
+         * Minimal, side-effect free (no full cache reset).
+         */
+        function clearUserAndToken() {
+          try {
+            localStorage.removeItem("gh_user");
+            localStorage.removeItem("gh_token");
+            if (typeof config === "object" && config) {
+              config.user = "";
+              config.token = "";
+            }
+            const userInput = document.getElementById("gh-username");
+            const tokenInput = document.getElementById("gh-token");
+            if (userInput) userInput.value = "";
+            if (tokenInput) tokenInput.value = "";
+            const userStatus = document.getElementById("user-status");
+            const tokenStatus = document.getElementById("token-status");
+            if (userStatus) userStatus.textContent = "Username cleared.";
+            if (tokenStatus) tokenStatus.textContent = "Token cleared.";
+            console.info("[config] Cleared gh_user and gh_token.");
+          } catch (e) {
+            console.error("[config] Failed to clear credentials:", e);
+            const tokenStatus = document.getElementById("token-status");
+            if (tokenStatus) tokenStatus.textContent = "Failed to clear token/user.";
+          }
+        }
+
 
       function setUserFromInput() {
         const u = document.getElementById("gh-username").value.trim();
@@ -2156,6 +2186,10 @@ body, #main-content {
           setUserFromInput();
           setTokenFromInput();
           init();
+        };
+        
+        document.getElementById("clear-token").onclick = function () {
+          clearUserAndToken();
         };
         document.getElementById("fetch-json").onclick = async function () {
           // Clear all cached data before fetching new stuff
